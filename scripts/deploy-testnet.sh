@@ -11,6 +11,8 @@ cd "$ROOT_DIR"
 
 DRY_RUN="${DRY_RUN:-0}"
 SEASON_SEC="${SEASON_SEC:-60}"
+CONTRACT_FUND="${CONTRACT_FUND:-3.5 NEAR}"
+BOAT_FUND="${BOAT_FUND:-0.5 NEAR}"
 if [[ "$DRY_RUN" == "1" ]]; then
   MASTER="${MASTER:-example.testnet}"
 else
@@ -21,6 +23,24 @@ if ! [[ "$SEASON_SEC" =~ ^[0-9]+$ ]] || (( SEASON_SEC < 30 )); then
   printf 'SEASON_SEC must be an integer of at least 30 seconds\n' >&2
   exit 1
 fi
+
+parse_near_amount() {
+  local amount="$1"
+  if [[ "$amount" =~ ^([0-9]+([.][0-9]+)?|[.][0-9]+)[[:space:]]+NEAR$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+  else
+    return 1
+  fi
+}
+
+CONTRACT_FUND_NEAR="$(parse_near_amount "$CONTRACT_FUND")" || {
+  printf 'CONTRACT_FUND must be a non-negative NEAR amount such as "3.5 NEAR"\n' >&2
+  exit 1
+}
+BOAT_FUND_NEAR="$(parse_near_amount "$BOAT_FUND")" || {
+  printf 'BOAT_FUND must be a non-negative NEAR amount such as "0.5 NEAR"\n' >&2
+  exit 1
+}
 
 print_command() {
   printf '+ '
@@ -43,9 +63,43 @@ run_build() {
 }
 
 create_account() {
-  run_command near account create-account fund-myself "$1" "$2 NEAR" \
+  run_command near account create-account fund-myself "$1" "$2" \
     autogenerate-new-keypair save-to-legacy-keychain sign-as "$MASTER" \
     network-config testnet sign-with-legacy-keychain send
+}
+
+check_master_balance() {
+  local balance_output balance_near required_near
+
+  if ! balance_output="$(near account view-account-summary "$MASTER" network-config testnet now 2>&1)"; then
+    printf 'Warning: could not read %s balance; continuing without the balance check.\n' "$MASTER" >&2
+    return 0
+  fi
+
+  balance_near="$(printf '%s\n' "$balance_output" |
+    sed -E $'s/\033\\[[0-9;]*m//g' |
+    awk '
+      /Native account balance/ {
+        for (i = 1; i <= NF; i++) {
+          if ($i ~ /^[0-9]+([.][0-9]+)?$/ || $i ~ /^[.][0-9]+$/) {
+            print $i
+            exit
+          }
+        }
+      }
+    '
+  )"
+  if [[ -z "$balance_near" ]]; then
+    printf 'Warning: could not parse %s balance; continuing without the balance check.\n' "$MASTER" >&2
+    return 0
+  fi
+
+  required_near="$(awk -v total="$TOTAL_FUND_NEAR" 'BEGIN { printf "%.8f", total + 0.5 }')"
+  if awk -v balance="$balance_near" -v required="$required_near" 'BEGIN { exit !(balance < required) }'; then
+    printf 'Insufficient balance: %s has %s NEAR, but at least %s NEAR is required for funding and gas.\n' \
+      "$MASTER" "$balance_near" "$required_near" >&2
+    exit 1
+  fi
 }
 
 STAMP="$(date +%s)"
@@ -59,11 +113,19 @@ done
 
 run_build
 
+TOTAL_FUND_NEAR="$(awk -v contract="$CONTRACT_FUND_NEAR" -v boat="$BOAT_FUND_NEAR" \
+  -v boat_count="${#BOATS[@]}" 'BEGIN { printf "%.8f", contract + boat * boat_count }')"
+printf 'Total funding: %s NEAR (%s contract + %s x %s boat)\n' \
+  "$TOTAL_FUND_NEAR" "$CONTRACT_FUND" "${#BOATS[@]}" "$BOAT_FUND"
+if [[ "$DRY_RUN" != "1" ]]; then
+  check_master_balance
+fi
+
 # The contract account is funded first, then its generated key is used to deploy
 # and initialize. The genesis balances are 10,000,000 TIDE per demo account.
-create_account "$CONTRACT" 5
+create_account "$CONTRACT" "$CONTRACT_FUND"
 for boat in "${BOATS[@]}"; do
-  create_account "$boat" 1
+  create_account "$boat" "$BOAT_FUND"
 done
 
 GENESIS_JSON="["

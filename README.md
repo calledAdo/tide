@@ -7,8 +7,33 @@ Track: `memecoins` (NEAR Hackathon 2026). License: MIT. Status: testnet; contrac
 ## Try it in 2 minutes (no wallet, no funds)
 
 1. Run `./scripts/check.sh` -> see the two model tables, contract tests, the web simulation check, and `ALL CHECKS PASSED`.
-2. Open `web/index.html` -> see the demo mode. Pick `Lawless sea` -> the 10%-staked open-access run crosses the Allee threshold on day 9 and ends at 78 fish. Pick `$TIDE` -> the same crowd survives at 931,909 fish, with 50 exiles and 0 wrongful exiles.
+2. Open `web/index.html` -> see the demo mode (the default, even when `config.contract` is set). Pick `Lawless sea` -> the 10%-staked open-access run crosses the Allee threshold on day 9 and ends at 78 fish. Pick `$TIDE` -> the same crowd survives at 931,909 fish, with 50 exiles and 0 wrongful exiles. Use `web/index.html?contract=<id>` for live mode.
 3. To use a real testnet instance, follow the deployment steps below. The page's live mode reads chain state; actions remain CLI-driven.
+
+## Live on testnet
+
+The deployed testnet contract is `tide-1794517191.memethis-t40-demo.testnet`. Watch it in the [NEARBlocks explorer](https://testnet.nearblocks.io/address/tide-1794517191.memethis-t40-demo.testnet).
+
+It has **no access keys**. Verify with:
+
+```bash
+near account list-keys tide-1794517191.memethis-t40-demo.testnet network-config testnet now
+```
+
+Seasons are 60 seconds. It was deployed from the author's existing testnet account `memethis-t40-demo.testnet` with six demo boats: `ana-`, `ben-`, `cy-`, `dee-`, `eve-`, and `greedy-1794517191.memethis-t40-demo.testnet`.
+
+What already happened on chain, from `scripts/demo.sh`:
+
+- Season 18: six boats staked.
+- Season 19: five boats fished their fair share; greedy fished at full effort and was indicted.
+- Season 20: the assembly voted 5-1 to hold an ostracism, and three shards named greedy.
+- Season 21: greedy was exiled. Its `fish` and `ft_transfer` calls failed with `Smart contract panicked: EXILED until season 31`.
+
+Seasons keep running after the demo, so by the time you read this the exile has ended and greedy is back at sea (exile is temporary by design). The record stays on chain: the `indicted`, `assembly_closed` and `exiled` events are in the contract's transaction history in the explorer.
+
+To watch it, open `web/index.html?contract=tide-1794517191.memethis-t40-demo.testnet`, or click Live; `web/config.js` already points at it. History is kept in your browser and grows one point per season.
+
+The public RPC rate-limits bursts of view calls; `demo.sh` retries its polling automatically.
 
 ## The mechanic
 
@@ -101,6 +126,8 @@ Prerequisites are Rust, `cargo-near`, near-cli-rs 0.31, and a funded testnet acc
 MASTER=you.testnet ./scripts/deploy-testnet.sh
 ./scripts/demo.sh
 ```
+
+The default funding is `CONTRACT_FUND="3.5 NEAR"` for the contract and `BOAT_FUND="0.5 NEAR"` for each of the six demo accounts, for a total of approximately 6.5 NEAR before gas. Set either variable when running the deploy script if your account needs a different allocation.
 
 The deploy script builds `contract/target/near/tide.wasm`, creates and seeds the contract plus six demo accounts, initializes the contract, deletes all contract access keys, writes `web/config.js`, and writes `scripts/.env.demo`. Open `web/index.html?contract=<id>` for live mode. `DRY_RUN=1 MASTER=example.testnet ./scripts/deploy-testnet.sh` prints the build and transaction commands without requiring an account or network. `DRY_RUN=1 ./scripts/demo.sh` also prints its sequence and uses placeholder account IDs when `.env.demo` is absent.
 

@@ -57,6 +57,49 @@ tx() {
   "${command[@]}"
 }
 
+parallel_tx() {
+  local step="$1" method="$2" deposit="$3"
+  shift 3
+  local tmp_dir account args pid status failed=0 output panic
+  local -a accounts=() pids=() files=()
+
+  tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/tide-demo.XXXXXX")"
+  while (( $# > 0 )); do
+    account="$1"
+    args="$2"
+    shift 2
+    accounts+=("$account")
+    files+=("$tmp_dir/${#accounts[@]}.out")
+    tx "$account" "$method" "$args" "$deposit" >"${files[${#accounts[@]}-1]}" 2>&1 &
+    pids+=("$!")
+  done
+
+  for ((i = 0; i < ${#accounts[@]}; i++)); do
+    if wait "${pids[i]}"; then
+      status=0
+    else
+      status=$?
+    fi
+    output="$(<"${files[i]}")"
+    if (( status == 0 )); then
+      if [[ "$DRY_RUN" == "1" ]]; then
+        printf '%s\n' "$output"
+      fi
+      printf '%s: ok\n' "${accounts[i]}"
+    else
+      panic="$(printf '%s\n' "$output" | sed -n 's/.*\(Smart contract panicked:.*\)/\1/p' | tail -n 1)"
+      printf '%s: %s\n' "${accounts[i]}" "${panic:-transaction failed (exit $status)}"
+      failed=1
+    fi
+  done
+  rm -rf "$tmp_dir"
+
+  if (( failed )); then
+    printf 'Step %s failed; stopping the demo.\n' "$step" >&2
+    return 1
+  fi
+}
+
 view() {
   local method="$1" args="$2"
   local -a command=(near --quiet contract call-function as-read-only "$CONTRACT" "$method"
@@ -95,6 +138,11 @@ json_value() {
 wait_for() {
   local target_season="$1" target_stage="${2:-}"
   if [[ "$DRY_RUN" == "1" ]]; then
+    if (( target_season < DRY_CURRENT_SEASON )); then
+      printf 'Cannot wait for season %s: current season is already %s.\n' \
+        "$target_season" "$DRY_CURRENT_SEASON" >&2
+      return 1
+    fi
     printf 'DRY_RUN: would wait for season %s%s\n' "$target_season" \
       "${target_stage:+, stage $target_stage}"
     return
@@ -104,9 +152,51 @@ wait_for() {
     raw="$(view get_sea '{}')"
     season="$(printf '%s' "$raw" | json_value season)"
     stage="$(printf '%s' "$raw" | json_value assembly 2>/dev/null || true)"
+    if (( target_season < season )); then
+      printf 'Cannot wait for season %s%s: current season is already %s.\n' \
+        "$target_season" "${target_stage:+, stage $target_stage}" "$season" >&2
+      return 1
+    fi
     if (( season >= target_season )) && { [[ -z "$target_stage" ]] || [[ "$stage" == "$target_stage" ]]; }; then
       printf 'Reached season %s%s\n' "$season" "${stage:+, stage $stage}"
       return
+    fi
+    sleep 2
+  done
+}
+
+wait_for_stage() {
+  local target_season="$1" target_stage="$2"
+  if [[ "$DRY_RUN" == "1" ]]; then
+    printf 'DRY_RUN: would wait for season %s, stage %s (at least 15s left)\n' \
+      "$target_season" "$target_stage"
+    return 0
+  fi
+  while :; do
+    local raw season stage seconds_left half_left
+    raw="$(view get_sea '{}')"
+    season="$(printf '%s' "$raw" | json_value season)"
+    stage="$(printf '%s' "$raw" | json_value assembly 2>/dev/null || true)"
+    seconds_left="$(printf '%s' "$raw" | json_value seconds_left_in_season)"
+    if (( season > target_season )); then
+      printf 'Missed season %s, stage %s; waiting for the next cycle.\n' \
+        "$target_season" "$target_stage" >&2
+      return 2
+    fi
+    if (( season == target_season )) && [[ "$stage" == "$target_stage" ]]; then
+      if [[ "$target_stage" == "hold" ]]; then
+        half_left=$((seconds_left - season_len_sec / 2))
+      else
+        half_left=$seconds_left
+      fi
+      if (( half_left < 15 )); then
+        printf 'Only %ss remain in season %s %s; waiting for the next cycle and recomputing B.\n' \
+          "$half_left" "$target_season" "$target_stage" >&2
+        return 2
+      fi
+      printf 'Reached season %s, stage %s (%ss left in this half)\n' \
+        "$season" "$stage" "$half_left"
+      return 0
     fi
     sleep 2
   done
@@ -135,41 +225,144 @@ fair_effort() {
   '
 }
 
-printf '\n=== SEASON 0: BUILD SIX BOATS ===\n'
-for boat in "${ALL[@]}"; do
-  tx "$boat" stake "{\"amount\":\"$STAKE\"}" "0 NEAR"
-done
+boat_has_min_stake() {
+  local account="$1" raw stake
+  raw="$(view get_boat "{\"account_id\":\"${account}\"}")"
+  stake="$(printf '%s' "$raw" | json_value boat.stake 2>/dev/null || printf '0')"
+  node -e 'process.exit(BigInt(process.argv[1]) >= 5000000000000000000000000n ? 0 : 1)' "$stake"
+}
 
-wait_for 1
-printf '\n=== SEASON 1: FAIR FISHING AND OVERFISHING ===\n'
-for boat in "${HONEST[@]}"; do
-  if [[ "$DRY_RUN" == "1" ]]; then
-    effort=3344
-    printf 'DRY_RUN: fair effort for %s would be read from get_boat (using %s)\n' "$boat" "$effort"
-  else
-    effort="$(fair_effort "$boat")"
+if [[ "$DRY_RUN" == "1" ]]; then
+  current_season=0
+  seconds_left_in_season=60
+  season_len_sec=60
+  DRY_CURRENT_SEASON=0
+  all_staked=0
+else
+  sea_raw="$(view get_sea '{}')"
+  params_raw="$(view get_params '{}')"
+  current_season="$(printf '%s' "$sea_raw" | json_value season)"
+  seconds_left_in_season="$(printf '%s' "$sea_raw" | json_value seconds_left_in_season)"
+  season_len_sec="$(printf '%s' "$params_raw" | json_value season_len_sec)"
+  DRY_CURRENT_SEASON=0
+  all_staked=1
+  for boat in "${ALL[@]}"; do
+    if ! boat_has_min_stake "$boat"; then
+      all_staked=0
+    fi
+  done
+fi
+
+if (( all_staked )); then
+  B=$((current_season + 1))
+  while (( B % 3 != 0 )); do
+    B=$((B + 1))
+  done
+elif (( current_season % 3 == 0 && seconds_left_in_season >= 40 )); then
+  B="$current_season"
+else
+  B=$((current_season + (3 - current_season % 3) % 3))
+  if (( B == current_season )); then
+    B=$((B + 3))
   fi
-  tx "$boat" fish "{\"effort_bps\":$effort}" "0 NEAR"
-done
-tx "$greedy" fish '{"effort_bps":10000}' "0 NEAR"
-printf '%s\n' 'Indictments for cycle 0:'
-view get_indictments '{"cycle":0}'
+fi
 
-wait_for 2 hold
-printf '\n=== SEASON 2, HOLD: VOTE TO HOLD AN OSTRACISM ===\n'
-for boat in "${HONEST[@]}"; do
-  tx "$boat" vote_hold '{"yes":true}' "0 NEAR"
-done
-tx "$greedy" vote_hold '{"yes":false}' "0 NEAR"
+base_wait_sec=0
+if (( B > current_season )); then
+  base_wait_sec=$((seconds_left_in_season + (B - current_season - 1) * season_len_sec))
+fi
+expected_exile_season=$((B + 13))
+printf '\n=== PLANNED SCHEDULE ===\n'
+printf 'Base season B=%s (current season %s)\n' "$B" "$current_season"
+printf 'Season length: %ss; current season has %ss remaining\n' \
+  "$season_len_sec" "$seconds_left_in_season"
+printf '  Season B (%s): stake all 6 accounts [about %ss from now]\n' \
+  "$B" "$base_wait_sec"
+printf '  Season B+1 (%s): fair fishing x5 and greedy fishing [about %ss from now]\n' \
+  "$((B + 1))" "$((base_wait_sec + season_len_sec))"
+printf '  Season B+2 (%s), hold: votes [about %ss from now]\n' \
+  "$((B + 2))" "$((base_wait_sec + 2 * season_len_sec))"
+printf '  Season B+2 (%s), shards: 3 shards [about %ss from now]\n' \
+  "$((B + 2))" "$((base_wait_sec + 2 * season_len_sec + season_len_sec / 2))"
+printf '  Season B+3 (%s): tick, assembly, exiles [about %ss from now]\n' \
+  "$((B + 3))" "$((base_wait_sec + 3 * season_len_sec))"
+printf '  Expected exile error: EXILED until season %s\n' "$expected_exile_season"
 
-wait_for 2 shards
-printf '\n=== SEASON 2, SHARDS: NAME THE OVERFISHER ===\n'
-for boat in "${HONEST[@]:0:3}"; do
-  tx "$boat" write_shard "{\"names\":[\"$greedy\"]}" "0 NEAR"
+if (( all_staked )); then
+  printf '\nAll 6 boats already have at least 5,000,000 TIDE staked; skipping staking.\n'
+else
+  wait_for "$B"
+  printf '\n=== SEASON %s: BUILD SIX BOATS ===\n' "$B"
+  stake_specs=()
+  for boat in "${ALL[@]}"; do
+    stake_specs+=("$boat" "{\"amount\":\"$STAKE\"}")
+  done
+  parallel_tx "staking" stake "0 NEAR" "${stake_specs[@]}"
+fi
+
+while :; do
+  wait_for "$((B + 1))"
+  printf '\n=== SEASON %s: FAIR FISHING AND OVERFISHING ===\n' "$((B + 1))"
+  fish_specs=()
+  for boat in "${HONEST[@]}"; do
+    if [[ "$DRY_RUN" == "1" ]]; then
+      effort=3344
+      printf 'DRY_RUN: fair effort for %s would be read from get_boat (using %s)\n' "$boat" "$effort"
+    else
+      effort="$(fair_effort "$boat")"
+    fi
+    fish_specs+=("$boat" "{\"effort_bps\":$effort}")
+  done
+  fish_specs+=("$greedy" '{"effort_bps":10000}')
+  parallel_tx "fishing" fish "0 NEAR" "${fish_specs[@]}"
+  printf 'Indictments for cycle %s:\n' "$((B / 3))"
+  view get_indictments "{\"cycle\":$((B / 3))}"
+
+  if wait_for_stage "$((B + 2))" hold; then
+    :
+  else
+    stage_status=$?
+    if (( stage_status != 2 )); then
+      exit "$stage_status"
+    fi
+    old_B="$B"
+    B=$((B + 3))
+    printf 'Recomputed B: %s -> %s; restarting fishing and assembly for the next cycle.\n' "$old_B" "$B"
+    continue
+  fi
+  printf '\n=== SEASON %s, HOLD: VOTE TO HOLD AN OSTRACISM ===\n' "$((B + 2))"
+  hold_specs=()
+  for boat in "${HONEST[@]}"; do
+    hold_specs+=("$boat" '{"yes":true}')
+  done
+  hold_specs+=("$greedy" '{"yes":false}')
+  parallel_tx "vote_hold" vote_hold "0 NEAR" "${hold_specs[@]}"
+
+  if wait_for_stage "$((B + 2))" shards; then
+    :
+  else
+    stage_status=$?
+    if (( stage_status != 2 )); then
+      exit "$stage_status"
+    fi
+    old_B="$B"
+    B=$((B + 3))
+    printf 'Recomputed B: %s -> %s; restarting fishing and assembly for the next cycle.\n' "$old_B" "$B"
+    continue
+  fi
+  printf '\n=== SEASON %s, SHARDS: NAME THE OVERFISHER ===\n' "$((B + 2))"
+  shard_specs=()
+  for boat in "${HONEST[@]:0:3}"; do
+    shard_specs+=("$boat" "{\"names\":[\"$greedy\"]}")
+  done
+  parallel_tx "write_shard" write_shard "0 NEAR" "${shard_specs[@]}"
+  break
 done
 
-wait_for 3
-printf '\n=== SEASON 3: SETTLE THE ASSEMBLY ===\n'
+expected_exile_season=$((B + 13))
+
+wait_for "$((B + 3))"
+printf '\n=== SEASON %s: SETTLE THE ASSEMBLY ===\n' "$((B + 3))"
 tx "$ana" tick '{}' "0 NEAR"
 printf '%s\n' 'Assembly:'
 view get_assembly '{}'
@@ -191,7 +384,7 @@ for method in fish ft_transfer; do
       tx "$greedy" "$method" "$args" "0 NEAR"
     fi
     status=1
-    output='EXILED until season 13 (dry run)'
+    output="EXILED until season $expected_exile_season (dry run)"
   else
     if [[ "$method" == "ft_transfer" ]]; then
       output="$(tx "$greedy" "$method" "$args" "1 yoctoNEAR" 2>&1)"
@@ -202,11 +395,11 @@ for method in fish ft_transfer; do
   fi
   set -e
   printf '%s\n' "$output"
-  if (( status == 0 )) || [[ "$output" != *'EXILED until season 13'* ]]; then
+  if (( status == 0 )) || [[ "$output" != *"EXILED until season $expected_exile_season"* ]]; then
     printf '%s did not fail with the expected exile error.\n' "$method" >&2
     exit 1
   fi
-  printf 'Expected error: EXILED until season 13\n'
+  printf 'Expected error: EXILED until season %s\n' "$expected_exile_season"
 done
 
 printf '\nDEMO COMPLETE\n'

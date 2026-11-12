@@ -10,12 +10,13 @@
   };
   const qs = new URLSearchParams(location.search);
   const forced = qs.has('demo');
-  const contract = qs.get('contract') || cfg.contract || '';
+  const urlContract = qs.get('contract') || '';
+  const contract = urlContract || cfg.contract || '';
   const network = qs.get('network') || cfg.network || 'testnet';
   const rpc = qs.get('rpc') || cfg.rpc || (
     network === 'mainnet' ? 'https://free.rpc.fastnear.com' : 'https://test.rpc.fastnear.com'
   );
-  const live = Boolean(contract) && !forced;
+  const live = Boolean(urlContract) && !forced;
   const C = window.TideSim.constants;
   const $ = id => document.getElementById(id);
 
@@ -28,7 +29,9 @@
   let history = [];
   let log = [];
   let oldStatus = {};
+  const loggedAssemblyCycles = new Set();
   let lawlessRun = null;
+  const historyKey = 'tide-history:' + network + ':' + contract;
 
   /* Formatting helpers */
   // Format numeric values using compact notation for large values.
@@ -54,6 +57,44 @@
   function tok(n) {
     return Number(n && typeof n === 'object' && '0' in n ? n[0] : n || 0) / 1e18;
   }
+
+  function loadHistory() {
+    if (!live || !contract) {
+      return [];
+    }
+    try {
+      const saved = JSON.parse(localStorage.getItem(historyKey) || '[]');
+      if (!Array.isArray(saved)) {
+        return [];
+      }
+      const bySeason = new Map();
+      saved.filter(p => p && Number.isFinite(+p.season) && Number.isFinite(+p.stock))
+        .forEach(p => bySeason.set(+p.season, { season: +p.season, stock: +p.stock }));
+      return Array.from(bySeason.values())
+        .sort((a, b) => a.season - b.season)
+        .slice(-500);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function rememberHistory(point) {
+    const found = history.find(p => p.season === point.season);
+    if (found) {
+      found.stock = point.stock;
+    } else {
+      history.push(point);
+    }
+    history.sort((a, b) => a.season - b.season);
+    if (history.length > 500) {
+      history = history.slice(-500);
+    }
+    try {
+      localStorage.setItem(historyKey, JSON.stringify(history));
+    } catch (_) {}
+  }
+
+  history = loadHistory();
 
   // Apply the active mode and its corresponding controls and status text.
   function mode() {
@@ -84,9 +125,14 @@
     const r = 794;
     const t = 24;
     const b = 330;
-    return a.map((v, i) => {
-      const x = l + (a.length === 1 ? 0 : i * (r - l) / (a.length - 1));
-      const y = t + (1 - Math.max(0, Math.min(C.K, v)) / C.K) * (b - t);
+    const points = a.map((v, i) => typeof v === 'object'
+      ? { season: +v.season, stock: +v.stock }
+      : { season: i, stock: +v });
+    const min = points.length ? points[0].season : 0;
+    const max = points.length ? points[points.length - 1].season : 0;
+    return points.map((v, i) => {
+      const x = l + (min === max ? (r - l) / 2 : (v.season - min) * (r - l) / (max - min));
+      const y = t + (1 - Math.max(0, Math.min(C.K, v.stock)) / C.K) * (b - t);
       return (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
     }).join(' ');
   }
@@ -118,10 +164,35 @@
       h += '<path class="ghost" d="' + path(ghost) + '"/>';
     }
     if (a.length > 0) {
+      const points = a.map((v, i) => typeof v === 'object'
+        ? { season: +v.season, stock: +v.stock }
+        : { season: i, stock: +v });
+      const min = points[0].season;
+      const max = points[points.length - 1].season;
       const p = path(a);
-      const last = l + (a.length === 1 ? 0 : (a.length - 1) * (r - l) / (a.length - 1));
-      h += '<path class="stockarea" d="' + p + ' L' + last.toFixed(1) + ' ' + b;
-      h += ' L52 ' + b + ' Z"/><path class="stockline" d="' + p + '"/>';
+      const last = min === max ? (l + r) / 2 : r;
+      if (a.length > 1) {
+        h += '<path class="stockarea" d="' + p + ' L' + last.toFixed(1) + ' ' + b;
+        h += ' L52 ' + b + ' Z"/><path class="stockline" d="' + p + '"/>';
+      } else {
+        const yPoint = t + (1 - Math.max(0, Math.min(C.K, points[0].stock)) / C.K) * (b - t);
+        h += '<rect x="' + (last - 5) + '" y="' + (yPoint - 5);
+        h += '" width="10" height="10" fill="var(--signal)"/>';
+      }
+      if (live) {
+        h += '<text x="' + l + '" y="' + (b + 22) + '">SEASON ' + min + '</text>';
+        if (max !== min) {
+          h += '<text x="' + r + '" y="' + (b + 22) + '" text-anchor="end">SEASON ' + max + '</text>';
+        }
+        if (a.length < 2) {
+          h += '<text x="410" y="190" text-anchor="middle">HISTORY BUILDS AS YOU WATCH';
+          h += ' · ONE POINT PER SEASON</text>';
+        }
+      }
+    }
+    if (live && a.length < 2 && a.length === 0) {
+      h += '<text x="410" y="190" text-anchor="middle">HISTORY BUILDS AS YOU WATCH';
+      h += ' · ONE POINT PER SEASON</text>';
     }
     $('chart-content').innerHTML = h;
     $('ghostlegend').classList.toggle('hidden', !ghost);
@@ -171,28 +242,45 @@
   // Render assembly votes, shard progress, and the current assembly outcome.
   function assembly(a, eligible, season) {
     a = a || { hold_yes: 0, hold_no: 0, held: false, shards: {}, exiled: [] };
-    const yes = +a.hold_yes || 0;
-    const no = +a.hold_no || 0;
-    const total = Math.max(1, yes + no);
-    const el = eligible || 20;
-    const q = +a.quorum_shards || Math.max(1, Math.ceil(C.QUORUM * el));
-    const names = Object.keys(a.shards || {});
+    const currentYes = +a.hold_yes || 0;
+    const currentNo = +a.hold_no || 0;
+    const currentShards = a.shards || {};
+    const currentNames = Array.isArray(currentShards)
+      ? currentShards.filter(p => Array.isArray(p) && p.length)
+      : Object.keys(currentShards).map(n => [n, currentShards[n]]);
+    const last = a.last_result;
+    const showingLast = live && !currentYes && !currentNo && !currentNames.length && last;
+    const view = showingLast ? last : a;
+    const yes = +view.hold_yes || 0;
+    const no = +view.hold_no || 0;
+    const el = +view.eligible || eligible || 20;
+    const total = showingLast ? Math.max(1, el) : Math.max(1, yes + no);
+    const q = +view.quorum_shards || Math.max(1, Math.ceil(C.QUORUM * el));
+    const shards = showingLast ? {} : currentShards;
+    const names = Array.isArray(shards)
+      ? shards.filter(p => Array.isArray(p) && p.length)
+      : Object.keys(shards).map(n => [n, shards[n]]);
+    const breadcrumb = document.querySelector('#assembly .breadcrumb');
+    breadcrumb.textContent = showingLast
+      ? 'LAST ASSEMBLY · CYCLE ' + view.cycle
+      : '$TIDE · EVERY THIRD SEASON';
     $('holdyes').style.width = yes / total * 100 + '%';
     $('holdno').style.width = no / total * 100 + '%';
     $('holdcount').textContent = yes + ' yes · ' + no + ' no';
     $('quorum').textContent = 'quorum ' + q;
     $('shards').innerHTML = names.length
-      ? names.map(n => {
-        const v = +a.shards[n];
+      ? names.map(pair => {
+        const n = pair[0];
+        const v = +pair[1];
         return '<div class="shard"><span title="' + esc(n) + '">' + esc(n)
           + '</span><div class="shardtrack"><div class="shardfill" style="width:'
           + Math.min(100, v / q * 100) + '%"></div><i class="qline"></i></div><strong>'
           + v + '</strong></div>';
       }).join('')
       : '<span class="kicker">No names written in the current cycle.</span>';
-    const ex = a.exiled || [];
+    const ex = view.exiled || [];
     $('result').textContent = ex.length
-      ? 'EXILED: ' + ex.join(', ')
+      ? 'EXILED: ' + ex.join(', ').toUpperCase()
       : 'NO OSTRACISM HELD';
     $('assembly-status').textContent = yes || no || names.length
       ? 'latest tally'
@@ -365,6 +453,24 @@
     renderLog(log);
   }
 
+  // Add each finalized assembly to the live public record once per cycle.
+  function recordAssembly(a, season) {
+    const result = a && a.last_result;
+    const cycle = result && +result.cycle;
+    if (!Number.isFinite(cycle) || loggedAssemblyCycles.has(cycle)) {
+      return;
+    }
+    loggedAssemblyCycles.add(cycle);
+    const exiled = (result.exiled || []).join(', ');
+    log.unshift({
+      season: season,
+      kind: result.held ? 'exiled' : 'assembly',
+      text: 'Cycle ' + cycle + ' · assembly ' + (result.held ? 'held ' : 'not held ')
+        + (+result.hold_yes || 0) + '-' + (+result.hold_no || 0) + ' · '
+        + (exiled ? 'exiled ' + exiled : 'no exile')
+    });
+  }
+
   // Poll the configured contract and rebuild the live-mode display model.
   function poll() {
     const raw = qs.has('boats') ? qs.get('boats') : (cfg.boats || []).join(',');
@@ -375,7 +481,7 @@
       rpcCall('get_assembly'),
       rpcCall('get_exiles'),
       rpcCall('get_indictments', { cycle: Math.floor((+s.season || 0) / 3) })
-    ].concat(names.map(n => rpcCall('get_boat', { account_id: n })))).then(v => {
+    ].concat(names.map(n => rpcCall('get_boat', { account_id: n }))))).then(v => {
       const s = v[0];
       const a = v[1];
       const ex = v[2];
@@ -394,10 +500,8 @@
         boats: names.map((n, i) => liveBoat(n, v[4 + i], ind, ex)),
         assembly: a
       };
-      history.push(liveState.stock);
-      if (history.length > 120) {
-        history.shift();
-      }
+      rememberHistory({ season: liveState.season, stock: liveState.stock });
+      recordAssembly(a, liveState.season);
       log = [{
         season: liveState.season,
         kind: 'catch',
@@ -406,7 +510,7 @@
       }].concat(log).slice(0, 200);
       liveRender();
       $('banner').classList.remove('show');
-    }).catch(e => error(e.message || 'request failed')));
+    }).catch(e => error(e.message || 'request failed'));
   }
 
   // Render wallet command examples and wire their copy buttons.
