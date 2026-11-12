@@ -1,0 +1,10 @@
+contract/target/
+sim/__pycache__/
+*.svg.png
+# local tooling and private notes (kept on disk, not published)
+.claude/
+briefs/*.log
+memecoin-ideas.md
+memecoin-combos.md
+scripts/.env.demo
+.DS_Store

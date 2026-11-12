@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>$TIDE · A fishery memecoin</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="topbar wrap">
+      <a class="brand" href="#sea" aria-label="$TIDE home">
+        <span class="logo-mark">TD</span>
+        <span class="brand-name">$TIDE</span>
+        <span class="brand-divider" aria-hidden="true"></span>
+        <span class="brand-network">NEAR</span>
+      </a>
+      <nav class="nav" aria-label="Sections">
+        <a href="#sea">The sea</a>
+        <a href="#fleet-section">Fleet</a>
+        <a href="#assembly">Assembly</a>
+        <a href="#log-section">Log</a>
+        <a href="#rules">Rules</a>
+      </nav>
+      <div class="mode" aria-label="View mode">
+        <button id="demo-mode" type="button">Demo</button>
+        <button id="live-mode" type="button" title="Configure a contract to enable live mode">Live</button>
+      </div>
+    </header>
+
+    <div class="notice wrap" id="notice">
+      <span class="demo-notice">DEMO MODE · REPLAYING sim/tide_sim.py · NO WALLET NEEDED</span>
+      <span class="live-notice" id="live-notice">LIVE MODE · READ-ONLY CONTRACT VIEW</span>
+    </div>
+
+    <main class="wrap" id="app">
+      <div id="banner" class="banner" role="status"></div>
+
+      <section class="hero" aria-labelledby="hero-title">
+        <p class="breadcrumb">$TIDE · A MEMECOIN THAT IS A FISHERY</p>
+        <div class="hero-line">
+          <div>
+            <h1 id="hero-title">THE SEA POLICES ITSELF.</h1>
+            <p class="hero-copy">Fish it into existence. Fish it to extinction. Or vote the greedy out.</p>
+          </div>
+          <button class="primary hero-play" id="hero-play" type="button">PLAY THE DEMO</button>
+        </div>
+        <div class="hero-rule"></div>
+      </section>
+
+      <section class="sea-section" id="sea" aria-labelledby="sea-title">
+        <div class="section-heading">
+          <p class="breadcrumb">$TIDE · THE SEA</p>
+          <h2 id="sea-title">THE SEA</h2>
+          <p class="section-caption" id="sea-copy">UNMINTED $TIDE SUPPLY, REGROWING EVERY SEASON.</p>
+        </div>
+        <div class="sea-grid">
+          <div class="chart-column">
+            <div class="chartbox" id="chartbox">
+              <svg id="chart" viewBox="0 0 820 390" role="img" aria-label="Fish stock over seasons">
+                <defs>
+                  <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse"
+                    patternTransform="rotate(25)">
+                    <line x1="0" y1="0" x2="0" y2="8" class="hatch-line" />
+                  </pattern>
+                </defs>
+                <g id="chart-content"></g>
+              </svg>
+              <div class="dead hidden" id="dead">
+                <strong>THE SEA IS DEAD</strong>
+                <span id="deadtext"></span>
+              </div>
+            </div>
+            <div class="legend">
+              <span><i class="mark"></i>STOCK</span>
+              <span id="ghostlegend" class="hidden">
+                <i class="mark ghostmark"></i>WITHOUT THE ASSEMBLY
+              </span>
+            </div>
+
+            <div class="controls demoonly" id="controls">
+              <div class="pick">
+                <div class="seg" id="scenarios"></div>
+                <p id="blurb"></p>
+              </div>
+              <div class="controlbuttons">
+                <button class="control primary" id="play" type="button">PLAY</button>
+                <button class="control" id="restart" type="button">RESTART</button>
+              </div>
+              <div class="speed" aria-label="Playback speed">
+                <button data-speed="1" class="active" type="button">1X</button>
+                <button data-speed="4" type="button">4X</button>
+              </div>
+            </div>
+
+            <div class="actions" id="actions">
+              <div class="section-heading compact-heading">
+                <p class="breadcrumb">LIVE · COMMANDS</p>
+                <h2>ACTIONS</h2>
+              </div>
+              <p class="live-caption">READ-ONLY VIEW · COMMANDS ARE SHOWN FOR YOUR WALLET.</p>
+              <div class="actionlist" id="action-list"></div>
+            </div>
+          </div>
+
+          <aside class="stats" aria-label="Sea stats">
+            <p class="breadcrumb">LIVE READOUT</p>
+            <p class="mode-note" id="mode-note">ANIMATED DEMO · 2 SEASONS PER SECOND</p>
+            <div class="statsgrid">
+              <div class="stat">
+                <span class="label">DAY</span>
+                <strong class="value" id="day">—</strong>
+                <span class="note" id="countdown"></span>
+              </div>
+              <div class="stat">
+                <span class="label">FISH STOCK</span>
+                <strong class="value sea-number" id="stock">—</strong>
+                <span class="note">OF 1,000,000 CAPACITY</span>
+              </div>
+              <div class="stat wide">
+                <span class="label">TODAY'S CATCH VS QUOTA</span>
+                <strong class="value" id="catch">—</strong>
+                <div class="track">
+                  <div class="fill" id="catchfill"></div>
+                  <i class="quota" title="Quota"></i>
+                </div>
+                <div class="caption">
+                  <span id="catchnote">FLEET CATCH</span>
+                  <span>QUOTA 58,524</span>
+                </div>
+              </div>
+              <div class="stat">
+                <span class="label">CATCH MINTED</span>
+                <strong class="value" id="minted">—</strong>
+                <span class="note">NEW $TIDE</span>
+              </div>
+              <div class="stat">
+                <span class="label">FUEL BURNED</span>
+                <strong class="value danger-number" id="burned">—</strong>
+                <span class="note">COST OF EFFORT</span>
+              </div>
+              <div class="stat wide">
+                <span class="label">FISHER APR SO FAR</span>
+                <strong class="value" id="apr">—</strong>
+                <span class="note">NET CATCH AFTER FUEL</span>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="section" id="fleet-section" aria-labelledby="fleet-title">
+        <div class="section-heading">
+          <p class="breadcrumb">$TIDE · THE FLEET</p>
+          <h2 id="fleet-title">THE FLEET</h2>
+          <p class="section-caption" id="fleetnote">
+            20 BOATS · EQUAL STAKE · CATCH IS MINTED, FUEL IS BURNED
+          </p>
+        </div>
+        <div class="fleet" id="fleet"></div>
+      </section>
+
+      <section class="section" id="assembly" aria-labelledby="assembly-title">
+        <div class="section-heading">
+          <p class="breadcrumb">$TIDE · EVERY THIRD SEASON</p>
+          <h2 id="assembly-title">THE ASSEMBLY</h2>
+          <p class="section-caption" id="assembly-status">WAITING FOR CYCLE 1</p>
+        </div>
+        <div class="assemblygrid">
+          <div class="assemblycard" id="holdcard">
+            <div class="editorial-minihead">
+              <span class="row-number">01</span>
+              <span>STAGE 1 · HOLD AN OSTRACISM?</span>
+            </div>
+            <div class="barlabel">
+              <span id="holdcount">0 YES · 0 NO</span>
+              <span>ELIGIBLE BOATS</span>
+            </div>
+            <div class="tally">
+              <div class="yes" id="holdyes"></div>
+              <div class="no" id="holdno"></div>
+              <i class="half"></i>
+              <span class="bar-marker">50%</span>
+            </div>
+            <div class="barlabel"><span>YES</span><span>NO</span></div>
+          </div>
+          <div class="assemblycard" id="shardcard">
+            <div class="editorial-minihead">
+              <span class="row-number">02</span>
+              <span>STAGE 2 · THE SHARDS</span>
+            </div>
+            <div class="barlabel">
+              <span>NAMES WRITTEN</span>
+              <span id="quorum">QUORUM 0</span>
+            </div>
+            <div class="shards" id="shards">
+              <span class="kicker">NO NAMES WRITTEN IN THE CURRENT CYCLE.</span>
+            </div>
+            <p class="result" id="result">NO OSTRACISM HELD</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="log-section" aria-labelledby="log-title">
+        <div class="section-heading">
+          <p class="breadcrumb">$TIDE · PUBLIC RECORD</p>
+          <h2 id="log-title">THE LOG</h2>
+          <p class="section-caption" id="logcount">0 EVENTS</p>
+        </div>
+        <div class="log" id="log"></div>
+      </section>
+
+      <section class="section rules-section" id="rules" aria-labelledby="rules-title">
+        <div class="section-heading">
+          <p class="breadcrumb">$TIDE · THE MECHANIC</p>
+          <h2 id="rules-title">HOW IT WORKS</h2>
+        </div>
+        <div class="ruleslist" id="ruleslist">
+          <div class="editorial-row">
+            <span class="row-number">01</span>
+            <div><h3>THE SEA IS THE SUPPLY</h3>
+              <p>The sea is unminted supply. It starts at 700,000 fish and grows once per season.</p></div>
+          </div>
+          <div class="editorial-row">
+            <span class="row-number">02</span>
+            <div><h3>BOATS FISH, FUEL BURNS</h3>
+              <p>Holders stake TIDE as boats. Catch is minted and fishing fuel is burned.</p></div>
+          </div>
+          <div class="editorial-row">
+            <span class="row-number">03</span>
+            <div><h3>OVERFISHING IS PUBLIC</h3>
+              <p>A boat may fish harder than its fair share, but the excess is recorded as a public
+                indictment for the assembly cycle.</p></div>
+          </div>
+          <div class="editorial-row">
+            <span class="row-number">04</span>
+            <div><h3>THE ASSEMBLY CAN EXILE</h3>
+              <p>Every third season, eligible boats can vote to ostracize. A name written by at least
+                40% of eligible boats is exiled for 10 seasons.</p></div>
+          </div>
+          <div class="editorial-row">
+            <span class="row-number">05</span>
+            <div><h3>NO ADMIN, NO SETTER</h3>
+              <p>There is no owner, administrator, parameter setter, or cron job. Any call or tick
+                settles elapsed seasons, up to 40 per call.</p></div>
+          </div>
+        </div>
+        <div class="fine-print">
+          <h3>THE FINE PRINT</h3>
+          <p>Demo numbers come from sim/tide_sim.py, reproduced exactly (web/check-sim.cjs). Testnet
+            only. Not audited. No price is promised.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="wrap">
+      <span>BUILT AT NEAR HACKATHON 2026</span>
+      <span>NEAR TESTNET</span>
+    </footer>
+
+    <script src="config.js"></script>
+    <script src="sim.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
