@@ -217,7 +217,9 @@
   // Render boat status cards and remember changes for their transition state.
   function fleet(boats, season) {
     $('fleet').innerHTML = (boats || []).map(b => {
-      const ex = b.status === 'EXILED' || b.exiledUntil != null && b.exiledUntil > season;
+      const ex = live
+        ? b.exiledUntil != null && b.exiledUntil > season
+        : b.status === 'EXILED' || b.exiledUntil != null && b.exiledUntil > season;
       const ind = b.indictedThisCycle || b.status === 'INDICTED';
       const fac = b.status === 'FACTION' || b.type === 'faction';
       const status = ex
@@ -240,7 +242,7 @@
 
   /* Assembly */
   // Render assembly votes, shard progress, and the current assembly outcome.
-  function assembly(a, eligible, season) {
+  function assembly(a, eligible, season, exiles) {
     a = a || { hold_yes: 0, hold_no: 0, held: false, shards: {}, exiled: [] };
     const currentYes = +a.hold_yes || 0;
     const currentNo = +a.hold_no || 0;
@@ -278,7 +280,16 @@
           + v + '</strong></div>';
       }).join('')
       : '<span class="kicker">No names written in the current cycle.</span>';
-    const ex = view.exiled || [];
+    const exileUntil = new Map((exiles || []).map(p => [p[0], +p[1]]));
+    const ex = (view.exiled || []).map(n => {
+      const until = exileUntil.get(n);
+      if (!Number.isFinite(until)) {
+        return n;
+      }
+      return n + (until > season
+        ? ' (UNTIL SEASON ' + until + ')'
+        : ' (RETURNED SEASON ' + until + ')');
+    });
     $('result').textContent = ex.length
       ? 'EXILED: ' + ex.join(', ').toUpperCase()
       : 'NO OSTRACISM HELD';
@@ -405,9 +416,9 @@
   }
 
   // Convert live contract boat data into the display model used by the fleet renderer.
-  function liveBoat(n, v, ind, ex) {
+  function liveBoat(n, v, ind, ex, season) {
     const b = v && v.boat;
-    const x = (ex || []).find(p => p[0] === n);
+    const x = (ex || []).find(p => p[0] === n && +p[1] > season);
     const i = (ind || []).find(p => p[0] === n);
     return {
       name: n,
@@ -449,7 +460,12 @@
     $('fleetnote').textContent = liveState.boats.length + ' configured boats · '
       + (liveState.synced ? 'synced' : liveState.behind + ' seasons behind');
     fleet(liveState.boats, liveState.season);
-    assembly(liveState.assembly, liveState.assembly && liveState.assembly.eligible, liveState.season);
+    assembly(
+      liveState.assembly,
+      liveState.assembly && liveState.assembly.eligible,
+      liveState.season,
+      liveState.exiles
+    );
     renderLog(log);
   }
 
@@ -484,10 +500,11 @@
     ].concat(names.map(n => rpcCall('get_boat', { account_id: n }))))).then(v => {
       const s = v[0];
       const a = v[1];
-      const ex = v[2];
+      const season = +s.season || 0;
+      const ex = v[2] || [];
       const ind = v[3];
       liveState = {
-        season: +s.season || 0,
+        season: season,
         stock: +s.stock_fish || 0,
         dead: !!s.dead,
         died: s.died_season,
@@ -497,8 +514,9 @@
         synced: !!s.synced,
         behind: +s.seasons_behind || 0,
         left: +s.seconds_left_in_season || 0,
-        boats: names.map((n, i) => liveBoat(n, v[4 + i], ind, ex)),
-        assembly: a
+        boats: names.map((n, i) => liveBoat(n, v[4 + i], ind, ex, season)),
+        assembly: a,
+        exiles: ex
       };
       rememberHistory({ season: liveState.season, stock: liveState.stock });
       recordAssembly(a, liveState.season);

@@ -8,3 +8,4 @@ memecoin-ideas.md
 memecoin-combos.md
 scripts/.env.demo
 .DS_Store
+.vercel/

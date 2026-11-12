@@ -2,12 +2,18 @@
 
 A NEP-141 memecoin whose supply is a living fish stock: holders fish it into existence, can fish it to extinction, and police each other by Athenian ostracism.
 
+Live demo: https://tide-near.vercel.app (demo mode)
+Live contract view: https://tide-near.vercel.app/?contract=tide-1794517191.memethis-t40-demo.testnet
+
 Track: `memecoins` (NEAR Hackathon 2026). License: MIT. Status: testnet; contract keyless after deployment.
 
 ## Try it in 2 minutes (no wallet, no funds)
 
 1. Run `./scripts/check.sh` -> see the two model tables, contract tests, the web simulation check, and `ALL CHECKS PASSED`.
-2. Open `web/index.html` -> see the demo mode (the default, even when `config.contract` is set). Pick `Lawless sea` -> the 10%-staked open-access run crosses the Allee threshold on day 9 and ends at 78 fish. Pick `$TIDE` -> the same crowd survives at 931,909 fish, with 50 exiles and 0 wrongful exiles. Use `web/index.html?contract=<id>` for live mode.
+2. Open https://tide-near.vercel.app or open `web/index.html` locally to see demo mode (the default, even when
+   `config.contract` is set). Pick `Lawless sea` -> the 10%-staked open-access run crosses the Allee threshold
+   on day 9 and ends at 78 fish. Pick `$TIDE` -> the same crowd survives at 931,909 fish, with 50 exiles and
+   0 wrongful exiles. Use `web/index.html?contract=<id>` for live mode.
 3. To use a real testnet instance, follow the deployment steps below. The page's live mode reads chain state; actions remain CLI-driven.
 
 ## Live on testnet
