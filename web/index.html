@@ -22,14 +22,14 @@
         <a href="#rules">Rules</a>
       </nav>
       <div class="mode" aria-label="View mode">
-        <button id="demo-mode" type="button">Demo</button>
-        <button id="live-mode" type="button" title="Configure a contract to enable live mode">Live</button>
+        <button id="demo-mode" type="button">Replay</button>
+        <button id="live-mode" type="button" title="Configure a contract to enable live mode">Play</button>
       </div>
     </header>
 
     <div class="notice wrap" id="notice">
       <span class="demo-notice">DEMO MODE · REPLAYING sim/tide_sim.py · NO WALLET NEEDED</span>
-      <span class="live-notice" id="live-notice">LIVE MODE · READ-ONLY CONTRACT VIEW</span>
+      <span class="live-notice" id="live-notice">LIVE MODE · WALLET PLAY ENABLED</span>
     </div>
 
     <main class="wrap" id="app">
@@ -44,6 +44,9 @@
           </div>
           <button class="primary hero-play" id="hero-play" type="button">PLAY THE DEMO</button>
         </div>
+        <button class="replay-link" id="replay-link" type="button">
+          NEW HERE? WATCH THE 60-SECOND REPLAY &rarr;
+        </button>
         <div class="hero-rule"></div>
       </section>
 
@@ -97,7 +100,7 @@
                 <p class="breadcrumb">LIVE · COMMANDS</p>
                 <h2>ACTIONS</h2>
               </div>
-              <p class="live-caption">READ-ONLY VIEW · COMMANDS ARE SHOWN FOR YOUR WALLET.</p>
+              <p class="live-caption">WALLET ACTIONS ARE ABOVE · CLI EXAMPLES ARE SHOWN BELOW.</p>
               <div class="actionlist" id="action-list"></div>
             </div>
           </div>
@@ -143,8 +146,56 @@
                 <strong class="value" id="apr">—</strong>
                 <span class="note">NET CATCH AFTER FUEL</span>
               </div>
+              <div class="stat wide tick-stat play-only">
+                <button class="control" id="tick-button" type="button">TICK · SETTLE THE SEA</button>
+              </div>
             </div>
           </aside>
+        </div>
+      </section>
+
+      <section class="section play-only" id="player-section" aria-labelledby="player-title">
+        <div class="section-heading">
+          <p class="breadcrumb">$TIDE · ONBOARDING</p>
+          <h2 id="player-title">YOUR BOAT</h2>
+          <p class="section-caption">CLAIM TIDE, BUILD A BOAT, THEN FISH THE LIVE SEA.</p>
+        </div>
+        <div class="onboarding" id="player-panel">
+          <div class="editorial-row player-row" id="connect-row">
+            <span class="row-number">01</span>
+            <div class="player-row-body">
+              <h3>CONNECT</h3>
+              <div id="connect-content"></div>
+            </div>
+          </div>
+          <div class="editorial-row player-row" id="faucet-row">
+            <span class="row-number">02</span>
+            <div class="player-row-body">
+              <h3>REGISTER &amp; CLAIM 100,000 TIDE</h3>
+              <div id="faucet-content"></div>
+            </div>
+          </div>
+          <div class="editorial-row player-row" id="tap-row">
+            <span class="row-number">03</span>
+            <div class="player-row-body">
+              <h3>ENABLE ONE-TAP</h3>
+              <div id="tap-content"></div>
+            </div>
+          </div>
+          <div class="editorial-row player-row" id="boat-row">
+            <span class="row-number">04</span>
+            <div class="player-row-body">
+              <h3>BUILD A BOAT</h3>
+              <div id="boat-content"></div>
+            </div>
+          </div>
+        </div>
+        <div class="fishing-desk hidden" id="fishing-desk">
+          <div class="editorial-minihead">
+            <span class="row-number">05</span>
+            <span>FISHING DESK</span>
+          </div>
+          <div id="fishing-content"></div>
         </div>
       </section>
 
@@ -196,6 +247,7 @@
               <span class="kicker">NO NAMES WRITTEN IN THE CURRENT CYCLE.</span>
             </div>
             <p class="result" id="result">NO OSTRACISM HELD</p>
+            <div class="assembly-actions play-only" id="assembly-actions"></div>
           </div>
         </div>
       </section>

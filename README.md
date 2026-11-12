@@ -2,19 +2,50 @@
 
 A NEP-141 memecoin whose supply is a living fish stock: holders fish it into existence, can fish it to extinction, and police each other by Athenian ostracism.
 
-Live demo: https://tide-near.vercel.app (demo mode)
-Live contract view: https://tide-near.vercel.app/?contract=tide-1794517191.memethis-t40-demo.testnet
+Playable testnet page: https://tide-near.vercel.app/
+Replay: https://tide-near.vercel.app/?demo
 
 Track: `memecoins` (NEAR Hackathon 2026). License: MIT. Status: testnet; contract keyless after deployment.
 
-## Try it in 2 minutes (no wallet, no funds)
+## Try it in 2 minutes
+
+### Play it
+
+1. Open the [playable testnet page](https://tide-near.vercel.app/?contract=tide-1794517191.memethis-t40-demo.testnet).
+2. Connect a NEAR testnet wallet, then register and claim the one-time 100,000 TIDE faucet.
+3. Build a boat with at least 1,000 TIDE. The 1% build burn applies and fishing starts next season.
+4. Optionally enable one-tap signing, then set effort, preview your catch, and fish once per season.
+5. During an assembly, vote in the hold stage or write up to three shards in the shards stage.
+6. Use TICK to settle elapsed seasons when the contract is behind its clock.
+
+### Replay without a wallet
 
 1. Run `./scripts/check.sh` -> see the two model tables, contract tests, the web simulation check, and `ALL CHECKS PASSED`.
-2. Open https://tide-near.vercel.app or open `web/index.html` locally to see demo mode (the default, even when
-   `config.contract` is set). Pick `Lawless sea` -> the 10%-staked open-access run crosses the Allee threshold
+2. Open https://tide-near.vercel.app?demo or open `web/index.html?demo` locally to see replay mode. Pick `Lawless sea` ->
+   the 10%-staked open-access run crosses the Allee threshold
    on day 9 and ends at 78 fish. Pick `$TIDE` -> the same crowd survives at 931,909 fish, with 50 exiles and
-   0 wrongful exiles. Use `web/index.html?contract=<id>` for live mode.
-3. To use a real testnet instance, follow the deployment steps below. The page's live mode reads chain state; actions remain CLI-driven.
+   0 wrongful exiles. Use `web/index.html?contract=<id>` for a different playable contract.
+3. To use a real testnet instance, follow the deployment steps below.
+
+### Testing the playable app locally
+
+Serve `web/` from localhost so the browser can load the live wallet module:
+
+```bash
+python3 -m http.server 8080 --directory web
+```
+
+The dev-only hook is active only on `localhost` and `127.0.0.1`. A test harness can set a connected
+account and its already-authorized one-tap secret in that browser's local storage:
+
+```js
+localStorage.setItem('tide-dev-account', '<account>');
+localStorage.setItem('tide-chip-key:<account>', '<ed25519-secret-key>');
+```
+
+The secret must correspond to a function-call key on the contract account, and is never stored in this
+repository. Fishing, voting, shards, staking, unstaking, and tick can then be tested without wallet popups.
+Registration, the faucet, and enabling one-tap remain wallet-only actions in dev mode.
 
 ## Live on testnet
 
@@ -172,10 +203,11 @@ The deploy script builds `contract/target/near/tide.wasm`, creates and seeds the
 - Voting is one vote per boat, with a minimum stake of 1,000 TIDE and a one-season age requirement. A whale that splits early across accounts gains votes.
 - With no honest majority, there is no rescue.
 - A freshly funded new boat can still be built by an exiled owner from another account. It costs 1% and requires fresh capital.
-- Seasons advance lazily: there is no cron job; any state-changing call or `tick` settles them, up to 40 per call.
+- Seasons settle lazily, at most 40 per call; the page blocks actions only when more than 40 seasons are
+  unsettled. A keeper may call `tick` periodically to keep the sea current; anyone can call `tick`.
 - Views project unsettled seasons but do not replay assemblies. Call `tick` to settle an assembly on chain.
 - On-chain randomness is not used anywhere.
-- The page's live mode is read-only; actions are via CLI.
+- The live page supports wallet actions; the CLI remains useful for independent contract inspection.
 - The testnet faucet exists only on deployments initialized with a nonzero faucet amount.
 - Nothing is audited.
 
