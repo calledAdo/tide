@@ -1,5 +1,8 @@
 import { nearToYocto } from 'near-api-js';
 
+// TIDE_CONTRACT remains environment-driven; this is the current demo value.
+export const DEMO_TIDE_CONTRACT = 'sea-1794591365.tide-sponsor-53394.testnet';
+
 const DEFAULTS = {
   PORT: '3101',
   HOST: '127.0.0.1',

@@ -59,6 +59,16 @@
   text-transform: uppercase;
 }
 
+.sea-footer {
+  padding: 0 17px 16px;
+  font: 800 10px/1.5 JetBrains Mono;
+}
+
+.sea-footer a {
+  color: var(--signal);
+  text-decoration: underline;
+}
+
 .sea-visual svg {
   display: block;
   width: 100%;
@@ -311,6 +321,10 @@
   }
 
   .sea-caption {
+    padding-inline: 12px;
+  }
+
+  .sea-footer {
     padding-inline: 12px;
   }
 }

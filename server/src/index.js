@@ -53,7 +53,7 @@ function disabledIndexer() {
 
 function disabledBots() {
   return {
-    status: () => ({ enabled: false, accounts: [], lastRunAt: null }),
+    status: () => ({ enabled: false, accounts: [], lastRunAt: null, stock: null, floorActive: false }),
     summary: () => 'disabled; no bot captains configured',
   };
 }

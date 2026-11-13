@@ -135,6 +135,11 @@ export function FishSea({ sea, snapshot, account, onSelect }: Props) {
         {boats.length} BOATS ON THE WATER · {activeExiles.length} ON EXILE ISLAND · CLICK A HULL
         TO INSPECT ITS CAPTAIN
       </div>
+      <footer className="sea-footer">
+        <a href="#/how#first-sea-died">
+          This is the second sea. The first one died on day 1103 — read why.
+        </a>
+      </footer>
     </section>
   );
 }

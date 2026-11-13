@@ -10,7 +10,7 @@ import {
 import type { TideWallet, WalletSnapshot } from '../near/wallet';
 import { tideAmountExceedsBalance, tideUnits } from '../config';
 import { compactNumber, formatTide } from '../lib/format';
-import { RunAction, seconds, shortName } from './shared';
+import { RunAction, seconds, shortName, useSeasonClock } from './shared';
 import { YourDay } from './YourDay';
 
 type Props = {
@@ -32,6 +32,7 @@ export function BoatPage({ wallet, walletApi, snapshot, onConnect, run, onRefres
   const [amount, setAmount] = useState('10000');
   const [history, setHistory] = useState<BoatHistory | null>(null);
   const [failed, setFailed] = useState(false);
+  const clock = useSeasonClock(snapshot.sea);
   useEffect(() => {
     if (!account) return undefined;
     let live = true;
@@ -65,7 +66,7 @@ export function BoatPage({ wallet, walletApi, snapshot, onConnect, run, onRefres
   const nextStake = stake < 50_000e18 ? 50_000 : 1_000_000;
   const progress = hasBoat ? Math.min(100, stake / (nextStake * 1e18) * 100) : 0;
   const amountTooMuch = tideAmountExceedsBalance(amount, snapshot.playerBalance);
-  const currentSeason = snapshot.sea?.season ?? 0;
+  const currentSeason = clock.season;
   const exiled = boat?.exiled_until && boat.exiled_until > currentSeason;
   const indicted = snapshot.indictments.some(([name]) => name === account);
   const blocked = exiled
@@ -149,6 +150,7 @@ export function BoatPage({ wallet, walletApi, snapshot, onConnect, run, onRefres
             )}
           >DOCK</button>
         </div>
+        <p className="hull-warning">upgrading pauses fishing until tomorrow</p>
         {blocked && <p className="blocked-reason">BLOCKED · {blocked}</p>}
       </section>
       <section className="boat-section standing-section">
@@ -161,8 +163,9 @@ export function BoatPage({ wallet, walletApi, snapshot, onConnect, run, onRefres
         </div>
         {exiled && snapshot.sea && (
           <p className="blocked-reason">
-            RELEASE IN {seconds(Math.max(0, ((boat?.exiled_until ?? currentSeason) - currentSeason)
-              * snapshot.sea.season_len_sec + snapshot.sea.seconds_left_in_season))}
+            RELEASE IN {seconds(Math.max(0,
+              ((boat?.exiled_until ?? currentSeason) - currentSeason - 1)
+              * snapshot.sea.season_len_sec + clock.secondsLeft))}
           </p>
         )}
       </section>

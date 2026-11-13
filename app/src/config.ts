@@ -1,4 +1,8 @@
-export const CONTRACT = 'tide-1794517191.memethis-t40-demo.testnet';
+export const CONTRACT = 'sea-1794591365.tide-sponsor-53394.testnet';
+export const DEAD_SEA = {
+  contract: 'tide-1794517191.memethis-t40-demo.testnet',
+  diedSeason: 1103,
+} as const;
 export const NETWORK = 'testnet' as const;
 export const RPC_URL = 'https://test.rpc.fastnear.com';
 export const API_BASE = import.meta.env.VITE_TIDE_API || '/api';

@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { CONTRACT } from '../config';
 import { formatAccountAddress, type TransactionResult } from '../near/wallet';
-import type { AssemblyView, SeaView, TransactionRecord } from '../near/types';
+import type { AssemblyView, BoatView, SeaView, TransactionRecord } from '../near/types';
+import { asString } from '../near/types';
 
 export const faucetClaimedKey = (account: string): string => `tide-faucet-claimed:${account}`;
 
@@ -34,6 +36,46 @@ export function shortName(account: string): string {
 export function seconds(value: number): string {
   const total = Math.max(0, Math.floor(value));
   return `${Math.floor(total / 60)}:${(total % 60).toString().padStart(2, '0')}`;
+}
+
+export type SeasonClock = {
+  season: number;
+  secondsLeft: number;
+};
+
+export function useSeasonClock(sea: SeaView | null): SeasonClock {
+  const [anchor, setAnchor] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timestamp = Date.now();
+    setAnchor(timestamp);
+    setNow(timestamp);
+  }, [sea?.season, sea?.seconds_left_in_season, sea?.season_len_sec]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  if (!sea) return { season: 0, secondsLeft: 0 };
+  const elapsed = Math.max(0, Math.floor((now - anchor) / 1000));
+  const secondsLeft = Math.max(0, sea.seconds_left_in_season);
+  const seasonLength = Math.max(1, sea.season_len_sec);
+  if (elapsed < secondsLeft) {
+    return { season: sea.season, secondsLeft: secondsLeft - elapsed };
+  }
+  const afterRoll = elapsed - secondsLeft;
+  return {
+    season: sea.season + 1 + Math.floor(afterRoll / seasonLength),
+    secondsLeft: seasonLength - (afterRoll % seasonLength),
+  };
+}
+
+export function boatCanFishAtSeason(boat: BoatView | null | undefined, season: number): boolean {
+  return Boolean(
+    boat && Number(asString(boat.boat.stake)) > 0
+      && boat.boat.stake_season !== season
+      && boat.boat.last_fished !== season
+      && !(boat.exiled_until && boat.exiled_until > season),
+  );
 }
 
 export function assemblyStage(

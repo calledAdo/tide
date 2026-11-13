@@ -4,8 +4,12 @@ import { TideSim, type SimEngine } from '../sim/engine';
 import { shortName } from './shared';
 
 export function ReplayPage() {
-  const [scenario, setScenario] = useState('tide');
-  const [engine, setEngine] = useState<SimEngine>(() => TideSim.create('tide'));
+  const initialScenario = new URLSearchParams(location.hash.split('?')[1] ?? '').get('scenario');
+  const scenarioId = TideSim.SCENARIOS.some((item) => item.id === initialScenario)
+    ? initialScenario!
+    : 'tide';
+  const [scenario, setScenario] = useState(scenarioId);
+  const [engine, setEngine] = useState<SimEngine>(() => TideSim.create(scenarioId));
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [history, setHistory] = useState<number[]>([engine.state.stock]);

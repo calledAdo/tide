@@ -42,17 +42,44 @@ Registration, the faucet, and MetaMask setup remain wallet-only actions in dev m
 
 ## Live on testnet
 
-The deployed testnet contract is `tide-1794517191.memethis-t40-demo.testnet`. Watch it in the [NEARBlocks explorer](https://testnet.nearblocks.io/address/tide-1794517191.memethis-t40-demo.testnet).
+The deployed testnet contract is `sea-1794591365.tide-sponsor-53394.testnet`. Watch it in the
+[NEARBlocks explorer][live-explorer].
 
 It has **no access keys**. Verify with:
 
 ```bash
-near account list-keys tide-1794517191.memethis-t40-demo.testnet network-config testnet now
+near account list-keys sea-1794591365.tide-sponsor-53394.testnet network-config testnet now
 ```
 
-Seasons are 60 seconds. It was deployed from the author's existing testnet account `memethis-t40-demo.testnet` with six demo boats: `ana-`, `ben-`, `cy-`, `dee-`, `eve-`, and `greedy-1794517191.memethis-t40-demo.testnet`.
+Seasons are 60 seconds. The new sea is keyless and is kept alive by six demo bots run by the
+sponsor service.
 
-What already happened on chain, from `scripts/demo.sh`:
+The old demo sequence remains on the first sea's chain as historical evidence. The new bots fish
+within the sea's growth and stop entirely below twice the point of no return; human players are not
+limited.
+
+## The first sea died
+
+The first `$TIDE` sea is dead. Its contract was `tide-1794517191.memethis-t40-demo.testnet`; the
+live second sea is `sea-1794591365.tide-sponsor-53394.testnet`. Six demo captains fished it a little
+harder than it could regrow, about 77,500 fish a season against 73,155 of growth. The gap
+compounded, the stock crossed the point of no return, and on day 1103 the contract stopped minting
+for ever. Its final stock was 28. Nothing can restart it: the rule is in the contract and the
+contract has no keys.
+
+That is the whole thesis, demonstrated on a public chain rather than in a simulation.
+
+[Dead contract on NEARBlocks][dead-explorer]
+[Replay the Lawless sea scenario][lawless-replay]
+
+[live-explorer]: https://testnet.nearblocks.io/address/sea-1794591365.tide-sponsor-53394.testnet
+[dead-explorer]: https://testnet.nearblocks.io/address/tide-1794517191.memethis-t40-demo.testnet
+[lawless-replay]: https://tidenear.astromind.cc/#/replay?scenario=lawless
+
+What changed: the demo bots now fish inside the sea's growth and stop entirely below twice the
+point of no return; human players are not limited.
+
+What happened on the first sea, from `scripts/demo.sh`:
 
 - Season 18: six boats staked.
 - Season 19: five boats fished their fair share; greedy fished at full effort and was indicted.
@@ -61,7 +88,9 @@ What already happened on chain, from `scripts/demo.sh`:
 
 Seasons keep running after the demo, so by the time you read this the exile has ended and greedy is back at sea (exile is temporary by design). The record stays on chain: the `indicted`, `assembly_closed` and `exiled` events are in the contract's transaction history in the explorer.
 
-To watch it, open the [live app](https://tidenear.astromind.cc/). It is configured for this contract, and its history is kept in your browser and grows one point per season.
+To watch the second sea, open the [live app](https://tidenear.astromind.cc/). It is configured for
+`sea-1794591365.tide-sponsor-53394.testnet`, and its history is kept in your browser and grows one
+point per season.
 
 The public RPC rate-limits bursts of view calls; `demo.sh` retries its polling automatically.
 
@@ -71,7 +100,8 @@ The public RPC rate-limits bursts of view calls; `demo.sh` retries its polling a
 
 **REPLAY** runs the four simulation scenarios without a wallet, with play, pause, restart, speed, chart, fleet, assembly, log, and the dead-sea stamp.
 
-**HOW IT WORKS** presents the five rules, contract parameters, and the NEAR rationale.
+**HOW IT WORKS** presents the five rules, contract parameters, the first-sea wreck exhibit, and the
+NEAR rationale.
 
 The wallet side panel shows the full address, NEAR and TIDE balances, deposit instructions with a QR code, GET TEST NEAR and faucet actions, TIDE and NEAR withdrawal forms, your boat state and controls, the last ten local transactions, and disconnect. Its MetaMask flow and side-panel structure follow the author's other NEAR app, `meme-this-near`.
 
@@ -185,7 +215,13 @@ MASTER=you.testnet ./scripts/deploy-testnet.sh
 
 The default funding is `CONTRACT_FUND="3.5 NEAR"` for the contract and `BOAT_FUND="0.5 NEAR"` for each of the six demo accounts, for a total of approximately 6.5 NEAR before gas. Set either variable when running the deploy script if your account needs a different allocation.
 
-The deploy script builds `contract/target/near/tide.wasm`, creates and seeds the contract plus six demo accounts, initializes the contract, deletes all contract access keys, and writes `scripts/.env.demo`. It prints the new contract id; set it in `app/src/config.ts` before deploying the app. `DRY_RUN=1 MASTER=example.testnet ./scripts/deploy-testnet.sh` prints the build and transaction commands without requiring an account or network. `DRY_RUN=1 ./scripts/demo.sh` also prints its sequence and uses placeholder account IDs when `.env.demo` is absent.
+The deploy script builds `contract/target/near/tide.wasm`, creates and seeds the contract plus six
+demo accounts, initializes the contract, deletes all contract access keys, and writes
+`scripts/.env.demo`. It prints the new contract id; set it in `app/src/config.ts` before deploying
+the app. The current live contract is `sea-1794591365.tide-sponsor-53394.testnet`.
+`DRY_RUN=1 MASTER=example.testnet ./scripts/deploy-testnet.sh` prints the build and transaction
+commands without requiring an account or network. `DRY_RUN=1 ./scripts/demo.sh` also prints its
+sequence and uses placeholder account IDs when `.env.demo` is absent.
 
 ## Contract interface
 

@@ -26,7 +26,7 @@ type Route = 'sea' | 'harbour' | 'agora' | 'boat' | 'replay' | 'how';
 
 function useRoute(): Route {
   const read = (): Route => {
-    const value = location.hash.replace('#/', '');
+    const value = location.hash.replace('#/', '').split(/[?#]/)[0];
     if (value === 'harbour' || value === 'agora' || value === 'boat'
       || value === 'replay' || value === 'how') return value;
     return 'sea';

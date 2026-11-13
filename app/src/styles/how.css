@@ -67,6 +67,45 @@
   text-align: right;
 }
 
+.wreck-exhibit {
+  margin-top: 34px;
+  padding: 20px 0 22px;
+  border-block: 3px solid var(--ink);
+}
+
+.wreck-exhibit h2 {
+  margin: 6px 0 12px;
+  font: 900 42px/.9 Big Shoulders Display;
+}
+
+.wreck-exhibit > p:not(.eyebrow) {
+  max-width: 860px;
+  margin: 0 0 12px;
+  color: var(--muted);
+}
+
+.wreck-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin: 18px 0;
+}
+
+.wreck-links a,
+.wreck-change {
+  font: 800 10px/1.5 JetBrains Mono;
+}
+
+.wreck-links a {
+  color: var(--signal);
+  text-decoration: underline;
+}
+
+.wreck-exhibit .wreck-change {
+  margin: 0;
+  color: var(--ink);
+}
+
 .why-near {
   display: grid;
   grid-template-columns: 1fr 2fr repeat(3, auto);

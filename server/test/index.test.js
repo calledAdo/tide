@@ -42,12 +42,12 @@ test('/bots/status returns the bot status without caching', async () => {
     near: {},
     limiter: {},
     keeper: {},
-    bots: { status: () => ({ enabled: true, accounts: [], lastRunAt: null }), summary: () => 'enabled' },
+    bots: { status: () => ({ enabled: true, accounts: [], lastRunAt: null, stock: null, floorActive: false }), summary: () => 'enabled' },
   });
   const result = response();
   await handler({ method: 'GET', url: '/bots/status', headers: {} }, result);
   assert.equal(result.status, 200);
-  assert.deepEqual(result.body, { enabled: true, accounts: [], bots: [], lastRunAt: null });
+  assert.deepEqual(result.body, { enabled: true, accounts: [], bots: [], lastRunAt: null, stock: null, floorActive: false });
 });
 
 test('/health exposes the indexer gap', async () => {

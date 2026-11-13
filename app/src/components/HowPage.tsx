@@ -1,4 +1,5 @@
-import { CONTRACT, EXPLORER } from '../config';
+import { useEffect } from 'react';
+import { CONTRACT, DEAD_SEA, EXPLORER } from '../config';
 import type { Params } from '../near/types';
 
 const lessons = [
@@ -22,6 +23,12 @@ const lessons = [
 ] as const;
 
 export function HowPage({ params }: { params: Params | null }) {
+  useEffect(() => {
+    if (location.hash.includes('first-sea-died')) {
+      document.getElementById('first-sea-died')?.scrollIntoView();
+    }
+  }, []);
+
   return (
     <main className="how-page">
       <p className="eyebrow">$TIDE · FIELD NOTES</p>
@@ -56,6 +63,28 @@ export function HowPage({ params }: { params: Params | null }) {
           )}
         </dl>
       </div>
+      <section className="wreck-exhibit" id="first-sea-died">
+        <p className="eyebrow">ON-CHAIN EXHIBIT · SEASON {DEAD_SEA.diedSeason}</p>
+        <h2>THE FIRST SEA DIED.</h2>
+        <p>
+          The first $TIDE sea is dead. Six demo captains fished it a little harder than it could
+          regrow, about 77,500 fish a season against 73,155 of growth. The gap compounded, the
+          stock crossed the point of no return, and on day 1103 the contract stopped minting for
+          ever. Nothing can restart it: the rule is in the contract and the contract has no keys.
+        </p>
+        <p>Its final stock was 28 fish.</p>
+        <p>That is the whole thesis, demonstrated on a public chain rather than in a simulation.</p>
+        <div className="wreck-links">
+          <a href={`${EXPLORER}/address/${DEAD_SEA.contract}`} target="_blank" rel="noreferrer">
+            DEAD CONTRACT ON EXPLORER ↗
+          </a>
+          <a href="#/replay?scenario=lawless">REPLAY · LAWLESS SEA ↗</a>
+        </div>
+        <p className="wreck-change">
+          What changed: the demo bots now fish inside the sea&apos;s growth and stop entirely below
+          twice the point of no return; human players are not limited.
+        </p>
+      </section>
       <div className="why-near">
         <b>WHY NEAR</b>
         <p>
