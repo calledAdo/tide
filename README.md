@@ -2,19 +2,21 @@
 
 A NEP-141 memecoin whose supply is a living fish stock: holders fish it into existence, can fish it to extinction, and police each other by Athenian ostracism.
 
-[Play the live app](https://tide-near.vercel.app/). In 30 seconds: connect MetaMask -> get gas and token registration automatically -> claim 100,000 TIDE -> build a boat -> fish -> vote.
+[Play the live app](https://tidenear.astromind.cc/). In 30 seconds: connect MetaMask -> get gas and token registration automatically -> claim 100,000 TIDE -> build a boat -> fish -> vote.
 
-No MetaMask? [Watch the replay](https://tide-near.vercel.app/#/replay).
+The `tide-near.vercel.app` alias remains available.
+
+No MetaMask? [Watch the replay](https://tidenear.astromind.cc/#/replay).
 
 Track: `memecoins` (NEAR Hackathon 2026). License: MIT. Status: testnet; contract keyless after deployment.
 
 ## Try it in 30 seconds
 
-1. Open the [live app](https://tide-near.vercel.app/).
+1. Open the [live app](https://tidenear.astromind.cc/).
 2. Connect MetaMask. The app creates or resumes a NEAR eth-implicit account, requests 0.5 testnet NEAR and token registration, and asks MetaMask to approve the relayer key.
 3. Claim the one-time 100,000 TIDE faucet, build a boat with at least 1,000 TIDE, fish, and vote during an assembly.
 
-The [replay](https://tide-near.vercel.app/#/replay) needs no wallet. For local checks, run `./scripts/check.sh`; it prints the two model tables, contract tests, the app simulation check, and `ALL CHECKS PASSED`.
+The [replay](https://tidenear.astromind.cc/#/replay) needs no wallet. For local checks, run `./scripts/check.sh`; it prints the two model tables, contract tests, the app simulation check, and `ALL CHECKS PASSED`.
 
 ### Testing the app locally
 
@@ -59,7 +61,7 @@ What already happened on chain, from `scripts/demo.sh`:
 
 Seasons keep running after the demo, so by the time you read this the exile has ended and greedy is back at sea (exile is temporary by design). The record stays on chain: the `indicted`, `assembly_closed` and `exiled` events are in the contract's transaction history in the explorer.
 
-To watch it, open the [live app](https://tide-near.vercel.app/). It is configured for this contract, and its history is kept in your browser and grows one point per season.
+To watch it, open the [live app](https://tidenear.astromind.cc/). It is configured for this contract, and its history is kept in your browser and grows one point per season.
 
 The public RPC rate-limits bursts of view calls; `demo.sh` retries its polling automatically.
 
@@ -78,6 +80,8 @@ The wallet side panel shows the full address, NEAR and TIDE balances, deposit in
 MetaMask supplies a NEAR **eth-implicit account**, displayed as a 40-character `0x` address. The app switches MetaMask to the NEAR testnet EVM chain, chain `398`, at `https://eth-rpc.testnet.near.org`.
 
 On first connection, the sponsor service onboards the account with 0.5 testnet NEAR for gas and registers it with the TIDE token. The app then asks MetaMask to approve the relayer's limited `rlp_execute` key on the account. That approval enables NEAR Wallet Selector's `ethereum-wallets` module to submit contract actions, but every action still requires a MetaMask confirmation.
+
+The app is served from a custom domain because MetaMask's scanner flags free-hosting subdomains. API calls go through `/api` on the same domain.
 
 Onboarding is limited to once per account per 24 hours, five accounts per client IP per 24 hours, and the configured daily sponsor cap. The service can return an already-funded account without funding it again.
 

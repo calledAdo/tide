@@ -1,7 +1,7 @@
 export const CONTRACT = 'tide-1794517191.memethis-t40-demo.testnet';
 export const NETWORK = 'testnet' as const;
 export const RPC_URL = 'https://test.rpc.fastnear.com';
-export const API_BASE = import.meta.env.VITE_TIDE_API || 'https://tide.204-48-27-245.sslip.io';
+export const API_BASE = import.meta.env.VITE_TIDE_API || '/api';
 export const EXPLORER = 'https://testnet.nearblocks.io';
 export const ETH_RPC = 'https://eth-rpc.testnet.near.org';
 export const CHAIN_ID = 398;

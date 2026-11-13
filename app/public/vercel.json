@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://tide.204-48-27-245.sslip.io/:path*"
+    }
+  ]
+}
