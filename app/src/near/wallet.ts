@@ -31,6 +31,9 @@ const NEAR_EVM_TESTNET = defineChain({
   name: 'NEAR Protocol Testnet',
   nativeCurrency: { decimals: 18, name: 'NEAR', symbol: 'NEAR' },
   rpcUrls: { default: { http: [ETH_RPC] } },
+  blockExplorers: {
+    default: { name: 'NEAR EVM Explorer', url: 'https://eth-explorer-testnet.near.org' },
+  },
   testnet: true,
 });
 
@@ -80,6 +83,8 @@ export type TransactionResult = { hash: string; url: string };
 export const GAS = 180_000_000_000_000n;
 export const ETHEREUM_MAX_TGAS = 270_000_000_000_000n;
 const METAMASK_TIMEOUT = 'No response from MetaMask. Check the extension and try again.';
+const WALLET_INIT_TIMEOUT_MESSAGE = 'Wallet setup timed out. Check your wallet extension and try again.';
+export const WALLET_INIT_TIMEOUT_MS = 15_000;
 
 async function withMetaMaskTimeout<T>(
   operation: Promise<T>,
@@ -96,6 +101,29 @@ async function withMetaMaskTimeout<T>(
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+async function withWalletInitTimeout(operation: Promise<void>): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      operation,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(WALLET_INIT_TIMEOUT_MESSAGE)), WALLET_INIT_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+export function selectMetaMaskConnector<T extends {
+  readonly id: string;
+  readonly rdns?: string | readonly string[];
+}>(connectors: readonly T[], fallback: T): T {
+  return connectors.find((connector) => connector.id === 'io.metamask'
+    || connector.rdns === 'io.metamask'
+    || (Array.isArray(connector.rdns) && connector.rdns.includes('io.metamask'))) ?? fallback;
 }
 
 function devAccount(): string | undefined {
@@ -128,6 +156,30 @@ function findInjectedMetaMask(): MetaMaskProvider | undefined {
     ? ethereum
     : ethereum?.providers?.find((item) => item?._metamask) ?? fromMap;
   return provider && typeof provider.request === 'function' ? provider : undefined;
+}
+
+function storedWagmiConnectorIds(): string[] {
+  try {
+    const persisted = JSON.parse(localStorage.getItem('wagmi.store') ?? 'null') as {
+      state?: { connections?: { value?: [string, { connector?: { id?: unknown } }][] } };
+    } | null;
+    return persisted?.state?.connections?.value?.flatMap(([, connection]) =>
+      typeof connection.connector?.id === 'string' ? [connection.connector.id] : [],
+    ) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+function storedWagmiRecentConnectorId(): string | undefined {
+  const value = localStorage.getItem('wagmi.recentConnectorId');
+  if (!value) return undefined;
+  try {
+    const decoded: unknown = JSON.parse(value);
+    return typeof decoded === 'string' ? decoded : undefined;
+  } catch {
+    return value;
+  }
 }
 
 function findAnnouncedMetaMask(): Promise<MetaMaskProvider | undefined> {
@@ -395,6 +447,9 @@ export class TideWallet {
     error: '',
   };
   private initialized = false;
+  private walletInitPromise: Promise<void> | undefined;
+  private walletInitAttempt = 0;
+  private readonly metaMaskConnectorId = 'io.metamask';
 
   subscribe(listener: (snapshot: WalletSnapshot) => void): () => void {
     this.listeners.add(listener);
@@ -411,38 +466,104 @@ export class TideWallet {
     this.listeners.forEach((listener) => listener(this.snapshot));
   }
 
-  async initializeWallet(): Promise<void> {
-    if (this.initialized || this.snapshot.dev) return;
-    this.initialized = true;
-    this.provider = await findAnnouncedMetaMask() ?? findInjectedMetaMask();
-    if (!this.provider) {
-      this.initialized = false;
-      return;
-    }
+  private resetInitialization(): void {
+    this.initialized = false;
+    this.wagmi = undefined;
+    this.provider = undefined;
+    this.selector = undefined;
+    this.wallet = undefined;
+  }
+
+  private async initializeWalletOnce(attempt: number): Promise<void> {
+    const provider = await findAnnouncedMetaMask() ?? findInjectedMetaMask();
+    if (!provider) throw new Error('MetaMask not detected in this browser.');
+
     const target = {
-      id: 'io.metamask',
+      id: this.metaMaskConnectorId,
       name: 'MetaMask',
       rdns: 'io.metamask',
-      provider: () => this.provider as MetaMaskProvider,
+      provider: () => provider,
     };
-    this.wagmi = createConfig({
+    const wagmi = createConfig({
       chains: [NEAR_EVM_TESTNET],
       connectors: [injected({ target, shimDisconnect: true })],
       transports: { [CHAIN_ID]: http(ETH_RPC) },
       ssr: true,
     });
-    await wagmiReconnect(this.wagmi, { connectors: this.wagmi.connectors });
-    this.selector = await setupWalletSelector({
+    for (const connector of wagmi.connectors) {
+      const originalIsAuthorized = connector.isAuthorized.bind(connector);
+      connector.isAuthorized = async () => {
+        const connectorProvider = await connector.getProvider().catch(() => undefined);
+        if (!connectorProvider || typeof connectorProvider !== 'object' || !('request' in connectorProvider)) return false;
+        try {
+          const accounts = await (connectorProvider as { request: (request: { method: string }) => Promise<unknown> })
+            .request({ method: 'eth_accounts' });
+          return Array.isArray(accounts) && accounts.length > 0 ? originalIsAuthorized() : false;
+        } catch {
+          return false;
+        }
+      };
+    }
+
+    const recentConnectorId = storedWagmiRecentConnectorId();
+    const staleConnections = storedWagmiConnectorIds().some((id) => id !== this.metaMaskConnectorId);
+    if ((recentConnectorId && recentConnectorId !== this.metaMaskConnectorId) || staleConnections) {
+      await wagmi.storage?.removeItem('recentConnectorId');
+      if (staleConnections) localStorage.removeItem('wagmi.store');
+      wagmi.setState((state) => ({ ...state, connections: new Map(), current: null, status: 'disconnected' }));
+    }
+    await withMetaMaskTimeout(wagmiReconnect(wagmi, { connectors: wagmi.connectors }));
+
+    const selector = await setupWalletSelector({
       network: 'testnet',
       modules: [setupEthereumWallets({
-        wagmiConfig: this.wagmi,
+        wagmiConfig: wagmi,
         chainId: CHAIN_ID,
         skipSignInAccessKey: true,
       })],
     });
-    this.wallet = await this.selector.wallet('ethereum-wallets') as unknown as WalletApi;
-    const existing = this.selector.store.getState().accounts[0]?.accountId;
+    const wallet = await selector.wallet('ethereum-wallets') as unknown as WalletApi;
+    if (attempt !== this.walletInitAttempt) return;
+    this.provider = provider;
+    this.wagmi = wagmi;
+    this.selector = selector;
+    this.wallet = wallet;
+    selector.subscribeOnAccountChange((account) => {
+      this.setState({ account: account || undefined, dev: false });
+    });
+    const existing = selector.store.getState().accounts[0]?.accountId;
     if (existing) this.setState({ account: existing, dev: false });
+  }
+
+  async initializeWallet(): Promise<void> {
+    if (this.snapshot.dev || this.initialized) return this.walletInitPromise;
+    const attempt = ++this.walletInitAttempt;
+    this.initialized = true;
+    const init = this.initializeWalletOnce(attempt);
+    const promise = withWalletInitTimeout(init);
+    this.walletInitPromise = promise;
+    try {
+      await promise;
+    } catch (error) {
+      if (attempt === this.walletInitAttempt) {
+        this.walletInitAttempt += 1;
+        this.walletInitPromise = undefined;
+        this.resetInitialization();
+        const message = metaMaskErrorMessage(error);
+        this.setState({ progress: '', error: message });
+      }
+      throw error;
+    }
+  }
+
+  private assertMetaMaskAccount(accountId: string | undefined): void {
+    if (!isEthImplicitAccount(accountId)) return;
+    const active = this.wagmi && getAccount(this.wagmi);
+    if (!active?.isConnected
+      || active.connector?.id !== this.metaMaskConnectorId
+      || active.address?.toLowerCase() !== accountId) {
+      throw new Error('Reconnect MetaMask before signing this transaction.');
+    }
   }
 
   async connect(): Promise<void> {
@@ -451,20 +572,46 @@ export class TideWallet {
     }
     try {
       this.setState({ progress: 'Waiting for MetaMask…', error: '' });
-      await this.initializeWallet();
-      if (!this.wagmi || !this.provider || !this.wallet) {
-        throw new Error('MetaMask not detected. Install MetaMask to connect.');
+      try {
+        await this.initializeWallet();
+      } catch (error) {
+        if (!(error instanceof Error) || !/MetaMask not detected in this browser/i.test(error.message)) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        await this.initializeWallet();
       }
-      const connector = this.wagmi.connectors[0];
-      const result = await withMetaMaskTimeout(wagmiConnect(this.wagmi, { connector }));
-      const address = result.accounts[0]?.toLowerCase();
+      if (!this.wagmi || !this.provider || !this.wallet) throw new Error('Wallet setup is incomplete. Try again.');
+      const fallback = this.wagmi.connectors[0];
+      if (!fallback) throw new Error('Wallet setup is incomplete. Try again.');
+      const connector = selectMetaMaskConnector(this.wagmi.connectors, fallback);
+      const provider = await connector.getProvider().catch(() => undefined);
+      if (!provider) throw new Error('MetaMask not detected in this browser.');
+      const active = getAccount(this.wagmi);
+      let address = active.isConnected
+        && active.connector?.id === this.metaMaskConnectorId
+        && active.address
+        ? active.address.toLowerCase()
+        : undefined;
+      if (!address) {
+        try {
+          const result = await withMetaMaskTimeout(wagmiConnect(this.wagmi, { connector }));
+          address = result.accounts[0]?.toLowerCase() ?? getAccount(this.wagmi).address?.toLowerCase();
+        } catch (error) {
+          if ((error as { name?: unknown }).name !== 'ConnectorAlreadyConnectedError') throw error;
+          address = getAccount(this.wagmi).address?.toLowerCase();
+        }
+      }
       if (!address || !isEthImplicitAccount(address)) {
         throw new Error('MetaMask did not return a NEAR eth-implicit account.');
+      }
+      const connected = getAccount(this.wagmi);
+      if (connected.connector?.id !== this.metaMaskConnectorId || connected.address?.toLowerCase() !== address) {
+        throw new Error('Reconnect MetaMask before signing.');
       }
       this.setState({ account: address, progress: 'Switching to NEAR testnet…' });
       if (getAccount(this.wagmi).chainId !== CHAIN_ID) {
         await withMetaMaskTimeout(wagmiSwitchChain(this.wagmi, { chainId: CHAIN_ID }));
       }
+      this.assertMetaMaskAccount(address);
       this.setState({ progress: 'Setting up your account…' });
       const response = await fetch(`${API_BASE}/testnet/onboard`, {
         method: 'POST',
@@ -483,14 +630,16 @@ export class TideWallet {
         throw new Error(message || `Account setup failed (${response.status}).`);
       }
       this.setState({ progress: 'Approve the relayer key in MetaMask…' });
-      await activateRelayerKey(this.wagmi, this.provider, address, await getRelayerPublicKeyHex());
+      await activateRelayerKey(this.wagmi, provider as EIP1193Provider, address, await getRelayerPublicKeyHex());
       const signed = await withMetaMaskTimeout(this.wallet.signIn({ contractId: CONTRACT }));
+      this.assertMetaMaskAccount(address);
       const account = signed[0]?.accountId ?? address;
+      if (!isEthImplicitAccount(account)) {
+        throw new Error('MetaMask did not return a NEAR eth-implicit account.');
+      }
       this.setState({ account, dev: false, progress: '', error: '' });
     } catch (error) {
-      const message = /not detected/i.test(error instanceof Error ? error.message : '')
-        ? 'MetaMask not detected. Install MetaMask to connect.'
-        : metaMaskErrorMessage(error);
+      const message = metaMaskErrorMessage(error);
       this.setState({ progress: '', error: message });
       throw new Error(message);
     }
@@ -535,9 +684,7 @@ export class TideWallet {
       }
     }
     if (!this.wallet || !this.snapshot.account) throw new Error('Connect MetaMask first.');
-    if (!this.wagmi || !getAccount(this.wagmi).isConnected) {
-      throw new Error('Reconnect MetaMask before signing this transaction.');
-    }
+    this.assertMetaMaskAccount(this.snapshot.account);
     const action = actions.functionCall(method, args, GAS, deposit) as unknown as WalletAction;
     try {
       const transactions = prepareEthImplicitTransactions([{
@@ -559,6 +706,7 @@ export class TideWallet {
       throw new Error('NEAR withdrawals are not available with the dev signer.');
     }
     if (!this.wallet) throw new Error('Connect MetaMask first.');
+    this.assertMetaMaskAccount(this.snapshot.account);
     try {
       return resultOf(await withMetaMaskTimeout(this.wallet.signAndSendTransaction({
         receiverId: recipient,

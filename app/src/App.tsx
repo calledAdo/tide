@@ -68,7 +68,9 @@ export default function App() {
     client.setAccount(walletState.account);
   }, [client, walletState.account]);
   useEffect(() => {
-    void wallet.initializeWallet().catch(() => undefined);
+    void wallet.initializeWallet().catch((error: unknown) => {
+      console.error('Wallet initialization failed', error);
+    });
   }, [wallet]);
   useEffect(() => {
     setPanel(false);
