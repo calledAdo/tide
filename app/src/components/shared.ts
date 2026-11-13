@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react';
 import { CONTRACT } from '../config';
 import { formatAccountAddress, type TransactionResult } from '../near/wallet';
-import type { AssemblyView, BoatView, SeaView, TransactionRecord } from '../near/types';
+import type {
+  AssemblyView,
+  BoatView,
+  SeaPhase,
+  SeaView,
+  TransactionRecord,
+} from '../near/types';
 import { asString } from '../near/types';
 
 export const faucetClaimedKey = (account: string): string =>
@@ -78,6 +84,11 @@ export function boatCanFishAtSeason(boat: BoatView | null | undefined, season: n
       && boat.boat.last_fished !== season
       && !(boat.exiled_until && boat.exiled_until > season),
   );
+}
+
+export function seaPhase(sea: SeaView | null): SeaPhase {
+  if (sea?.phase) return sea.phase;
+  return sea?.dead ? 'Wrecked' : 'Fishing';
 }
 
 export function assemblyStage(

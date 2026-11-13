@@ -42,13 +42,14 @@ Registration, the faucet, and MetaMask setup remain wallet-only actions in dev m
 
 ## Live on testnet
 
-The deployed testnet contract is `sea-1794591365.tide-sponsor-53394.testnet`. Watch it in the
+The deployed testnet contract is `sea.tide-fund-94145.testnet`, a keyless generation 0 sea with a
+1,000,000-fish carrying capacity. Watch it in the
 [NEARBlocks explorer][live-explorer].
 
 It has **no access keys**. Verify with:
 
 ```bash
-near account list-keys sea-1794591365.tide-sponsor-53394.testnet network-config testnet now
+near account list-keys sea.tide-fund-94145.testnet network-config testnet now
 ```
 
 Seasons are 60 seconds. The new sea is keyless and is kept alive by six demo bots run by the
@@ -61,7 +62,7 @@ limited.
 ## The first sea died
 
 The first `$TIDE` sea is dead. Its contract was `tide-1794517191.memethis-t40-demo.testnet`; the
-live second sea is `sea-1794591365.tide-sponsor-53394.testnet`. Six demo captains fished it a little
+live v2 sea is `sea.tide-fund-94145.testnet`. Six demo captains fished it a little
 harder than it could regrow, about 77,500 fish a season against 73,155 of growth. The gap
 compounded, the stock crossed the point of no return, and on day 1103 the contract stopped minting
 for ever. Its final stock was 28. Nothing can restart it: the rule is in the contract and the
@@ -72,7 +73,7 @@ That is the whole thesis, demonstrated on a public chain rather than in a simula
 [Dead contract on NEARBlocks][dead-explorer]
 [Replay the Lawless sea scenario][lawless-replay]
 
-[live-explorer]: https://testnet.nearblocks.io/address/sea-1794591365.tide-sponsor-53394.testnet
+[live-explorer]: https://testnet.nearblocks.io/address/sea.tide-fund-94145.testnet
 [dead-explorer]: https://testnet.nearblocks.io/address/tide-1794517191.memethis-t40-demo.testnet
 [lawless-replay]: https://tidenear.astromind.cc/#/replay?scenario=lawless
 
@@ -88,8 +89,8 @@ What happened on the first sea, from `scripts/demo.sh`:
 
 Seasons keep running after the demo, so by the time you read this the exile has ended and greedy is back at sea (exile is temporary by design). The record stays on chain: the `indicted`, `assembly_closed` and `exiled` events are in the contract's transaction history in the explorer.
 
-To watch the second sea, open the [live app](https://tidenear.astromind.cc/). It is configured for
-`sea-1794591365.tide-sponsor-53394.testnet`, and its history is kept in your browser and grows one
+To watch the live sea, open the [live app](https://tidenear.astromind.cc/). It is configured for
+`sea.tide-fund-94145.testnet`, and its history is kept in your browser and grows one
 point per season.
 
 The public RPC rate-limits bursts of view calls; `demo.sh` retries its polling automatically.
@@ -100,7 +101,7 @@ The public RPC rate-limits bursts of view calls; `demo.sh` retries its polling a
 
 **REPLAY** runs the four simulation scenarios without a wallet, with play, pause, restart, speed, chart, fleet, assembly, log, and the dead-sea stamp.
 
-**HOW IT WORKS** presents the five rules, contract parameters, the first-sea wreck exhibit, and the
+**HOW IT WORKS** presents the five rules, live contract parameters, the generation ledger, and the
 NEAR rationale.
 
 The wallet side panel shows the full address, NEAR and TIDE balances, deposit instructions with a QR code, GET TEST NEAR and faucet actions, TIDE and NEAR withdrawal forms, your boat state and controls, the last ten local transactions, and disconnect. Its MetaMask flow and side-panel structure follow the author's other NEAR app, `meme-this-near`.
@@ -156,6 +157,9 @@ The values below are compile-time constants from `contract/src/sea.rs`; the cont
 | `NAMES_PER_SHARD` | 3 | Maximum names per shard |
 | `QUORUM_BPS` | 4,000 | 40% of eligible boats |
 | `SHARD_BURN` | 1 TIDE | Burn per name written |
+| `WRECK_BURN` | 50% of stake | Collective loss when the sea wrecks |
+| `RESEED_COST` | 1,000,000 TIDE | Fund required to start the healthy next sea |
+| `RECOVERY_TAX` | 50% of catch | Catch burned during recovery |
 | `MAX_CATCHUP` | 40 seasons | Maximum settlement per call |
 
 ## Why these parameters: the simulation
@@ -218,7 +222,7 @@ The default funding is `CONTRACT_FUND="3.5 NEAR"` for the contract and `BOAT_FUN
 The deploy script builds `contract/target/near/tide.wasm`, creates and seeds the contract plus six
 demo accounts, initializes the contract, deletes all contract access keys, and writes
 `scripts/.env.demo`. It prints the new contract id; set it in `app/src/config.ts` before deploying
-the app. The current live contract is `sea-1794591365.tide-sponsor-53394.testnet`.
+the app. The current live contract is `sea.tide-fund-94145.testnet`.
 `DRY_RUN=1 MASTER=example.testnet ./scripts/deploy-testnet.sh` prints the build and transaction
 commands without requiring an account or network. `DRY_RUN=1 ./scripts/demo.sh` also prints its
 sequence and uses placeholder account IDs when `.env.demo` is absent.
@@ -232,6 +236,7 @@ sequence and uses placeholder account IDs when `.env.demo` is absent.
 | `stake(amount)` | change | Build or top up a boat; burns 1% and starts next season. |
 | `unstake(amount)` | change | Return staked TIDE unless exile or an open indictment blocks it. |
 | `fish(effort_bps)` | change | Mint catch and burn fuel for one fishing trip. |
+| `contribute_reseed({ amount })` | change | Permanently burn TIDE to fund the next sea. |
 | `vote_hold(yes)` | change | Cast the stage 1 assembly vote. |
 | `write_shard(names)` | change | Write up to three account names in stage 2 and burn 1 TIDE/name. |
 | `claim_faucet()` | change | Claim the deployment's faucet amount once. |
@@ -241,6 +246,7 @@ sequence and uses placeholder account IDs when `.env.demo` is absent.
 | `get_assembly()` | view | Return current ballots, shards, quorum, and last result. |
 | `get_indictments(cycle)` | view | Return account names and overage for a cycle. |
 | `get_exiles()` | view | Return exiled account names and release seasons. |
+| `get_reckoning()` | view | Return phase, reseed drive, contributors, and history. |
 | `ft_transfer(receiver_id, amount, memo)` | change | NEP-141 transfer; exiled senders are blocked. |
 | `ft_transfer_call(receiver_id, amount, memo, msg)` | change | NEP-141 transfer-and-call; exiled senders are blocked. |
 | `ft_total_supply()` | view | Return total TIDE supply. |
@@ -257,6 +263,9 @@ sequence and uses placeholder account IDs when `.env.demo` is absent.
 
 - Voting is one vote per boat, with a minimum stake of 1,000 TIDE and a one-season age requirement. A whale that splits early across accounts gains votes.
 - With no honest majority, there is no rescue.
+- A wreck burns half of every boat's stake, including boats that fished fairly, and returns the
+  other half to each wallet. This deliberate collective liability is why the fleet must police
+  itself; catch is proportional to stake, so sinking the sea costs a dominant overfisher most.
 - A freshly funded new boat can still be built by an exiled owner from another account. It costs 1% and requires fresh capital.
 - Seasons settle lazily, at most 40 per call; the page blocks actions only when more than 40 seasons are
   unsettled. A keeper may call `tick` periodically to keep the sea current; anyone can call `tick`.

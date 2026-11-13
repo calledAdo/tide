@@ -4,7 +4,7 @@ import { compactNumber, formatTide } from '../lib/format';
 
 export function SeaHealth({ sea, history }: { sea: SeaView | null; history: HistoryPoint[] }) {
   const stock = Number(asString(sea?.stock_fish));
-  const msy = Math.max(1, Number(asString(sea?.msy_stock)));
+  const capacity = Math.max(1, Number(asString(sea?.carrying_capacity)));
   const caught = Number(asString(sea?.caught_this_season));
   const quota = Math.max(1, Number(asString(sea?.quota_per_season)));
   const data = history.slice(-40);
@@ -17,12 +17,14 @@ export function SeaHealth({ sea, history }: { sea: SeaView | null; history: Hist
     <section className="sea-health" aria-label="Sea health">
       <div className="health-heading">
         <p className="eyebrow">SEA HEALTH</p>
-        <b>{sea?.dead ? 'NO RECOVERY' : 'SUSTAINABILITY MONITOR'}</b>
+          <b>{sea?.phase === 'Wrecked'
+            ? 'THE RECKONING'
+            : sea?.phase === 'Recovering' ? 'RECOVERY MONITOR' : 'SUSTAINABILITY MONITOR'}</b>
       </div>
       <div className="health-grid">
         <div>
           <span>STOCK</span><strong>{compactNumber(stock)}</strong>
-          <small>{Math.round((stock / msy) * 100)}% OF SUSTAINABLE LEVEL</small>
+          <small>{Math.round((stock / capacity) * 100)}% OF CAPACITY</small>
         </div>
         <div>
           <span>TODAY&apos;S FLEET CATCH / QUOTA</span>

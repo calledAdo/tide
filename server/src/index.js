@@ -48,12 +48,13 @@ function readBody(request) {
 function disabledIndexer() {
   return {
     status: () => ({ enabled: false, source: null, txsSeen: 0, processedHashes: 0, txsTotal: null, gap: null, lastPollAt: null, lastSweepAt: null, events: 0, lastError: null }),
+    generations: () => [],
   };
 }
 
 function disabledBots() {
   return {
-    status: () => ({ enabled: false, accounts: [], lastRunAt: null, stock: null, floorActive: false }),
+    status: () => ({ enabled: false, accounts: [], lastRunAt: null, stock: null, generation: null, phase: null, capacity: null, sustainable: null, floor: null, floorActive: false, seaLostForever: false }),
     summary: () => 'disabled; no bot captains configured',
   };
 }
@@ -134,6 +135,12 @@ export function createHandler({ config, near, limiter, keeper, bots = disabledBo
       sendJson(response, 200, indexer.assemblies(
         queryLimit(url.searchParams.get('limit'), 20, 100),
         url.searchParams.get('active') === 'true',
+      ), { ...cors, 'cache-control': 'no-store' });
+      return;
+    }
+    if (request.method === 'GET' && url.pathname === '/generations') {
+      sendJson(response, 200, indexer.generations(
+        queryLimit(url.searchParams.get('limit'), 20, 100),
       ), { ...cors, 'cache-control': 'no-store' });
       return;
     }

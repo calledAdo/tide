@@ -14,9 +14,13 @@ const BOT_ACCOUNTS = [
 const BOT_DEFINITIONS = BOT_ACCOUNTS.map(([account, role]) => ({ account, role }));
 const BOT_GAS = 30n * 1_000_000_000_000n;
 const BOT_STAKE_AMOUNT = 9_900_000n * 10n ** 18n;
-const FLOOR_TRIGGER_STOCK = 400_000;
-const FLOOR_RECOVERY_STOCK = 500_000;
-const STOCK_CAP = 1_000_000;
+const DEFAULT_CAPACITY = 1_000_000;
+const TIDE_DECIMALS = 10n ** 18n;
+const DEFAULT_RESEED_BOT_SHARE = 150_000n * TIDE_DECIMALS;
+const SUSTAINABLE_FRACTION = 0.689;
+const HARD_FLOOR_FRACTION = 0.4;
+const RECOVERY_FRACTION = 0.5;
+const ALLEE_THRESHOLD_STOCK = 120_000;
 const TARGET_FRACTION_BPS = Object.freeze({ honest: 6_000, cautious: 4_000, overfisher: 10_000 });
 
 function newAccountState(definition) {
@@ -30,6 +34,9 @@ function newAccountState(definition) {
     lastCatchTx: null,
     lastVoteCycle: null,
     lastShardCycle: null,
+    reseedContributed: false,
+    reseedGeneration: null,
+    lastReseedTx: null,
     exiledUntil: null,
     lastError: null,
   };
@@ -40,6 +47,8 @@ function valueAsBigInt(value) {
   if (typeof value === 'object' && value !== null) {
     if ('0' in value) return BigInt(value[0]);
     if ('value' in value) return BigInt(value.value);
+    if ('balance' in value) return BigInt(value.balance);
+    if ('amount' in value) return BigInt(value.amount);
   }
   return BigInt(value ?? 0);
 }
@@ -49,9 +58,33 @@ function numberValue(value, fallback = 0) {
   return Number.isFinite(result) ? result : fallback;
 }
 
-export function growthForStock(value) {
+function capacityValue(value) {
+  const capacity = numberValue(value, DEFAULT_CAPACITY);
+  return capacity > 0 ? capacity : DEFAULT_CAPACITY;
+}
+
+export function growthForStock(value, capacity = DEFAULT_CAPACITY, alleeThreshold = ALLEE_THRESHOLD_STOCK) {
   const stock = numberValue(value);
-  return Math.round(0.6 * stock * (1 - stock / STOCK_CAP) * (stock - 120_000) / STOCK_CAP);
+  const cap = capacityValue(capacity);
+  return Math.round(0.6 * stock * (1 - stock / cap) * (stock - numberValue(alleeThreshold, ALLEE_THRESHOLD_STOCK)) / cap);
+}
+
+function levelsForCapacity(capacity) {
+  const cap = capacityValue(capacity);
+  return {
+    capacity: cap,
+    sustainable: Math.round(SUSTAINABLE_FRACTION * cap),
+    floor: Math.round(HARD_FLOOR_FRACTION * cap),
+    recovery: Math.round(RECOVERY_FRACTION * cap),
+  };
+}
+
+function phaseValue(value) {
+  const normalized = String(value ?? 'Fishing').toLowerCase().replace(/[_ -]/g, '');
+  if (normalized === 'wrecked') return 'Wrecked';
+  if (normalized === 'recovering') return 'Recovering';
+  if (normalized === 'lostforever' || normalized === 'sealostforever') return 'sea_lost_forever';
+  return 'Fishing';
 }
 
 function boatCanFish(boat) {
@@ -107,7 +140,19 @@ export function createBots({
   let timer;
   let keyCheckLogged = false;
   let enabled = config?.botsEnabled ?? true;
-  const strategy = { stock: null, floorActive: state.floorActive };
+  const strategy = {
+    stock: null,
+    floorActive: state.floorActive,
+    capacity: null,
+    sustainable: null,
+    floor: null,
+    generation: null,
+    phase: 'Fishing',
+    lostForever: false,
+  };
+  const reseedShare = config?.reseedBotShare === undefined
+    ? DEFAULT_RESEED_BOT_SHARE
+    : valueAsBigInt(config.reseedBotShare);
 
   async function persist() {
     await mkdir(dataDir, { recursive: true });
@@ -178,13 +223,19 @@ export function createBots({
     try { await persist(); } catch (persistError) { logger.error?.(`tide bots state error: ${errorMessage(persistError)}`); }
   }
 
-  async function act(definition, season, actionName, method, args, update) {
-    const keyPart = actionName === 'stake' ? 'stake' : actionName === 'fish' ? season : Math.floor(season / 3);
-    const key = `${definition.account}:${keyPart}:${actionName}`;
+  function actionKey(definition, season, generation, actionName) {
+    const keyPart = actionName === 'stake' || actionName === 'reseed'
+      ? generation
+      : actionName === 'fish' ? season : Math.floor(season / 3);
+    return `${definition.account}:${keyPart}:${actionName}`;
+  }
+
+  async function act(definition, season, generation, actionName, method, args, update) {
+    const key = actionKey(definition, season, generation, actionName);
     if (state.actions[key]) return false;
     try {
       const result = await sendAction(definition.account, method, args);
-      state.actions[key] = { account: definition.account, action: actionName, season, cycle: Math.floor(season / 3), tx: transactionHash(result), at: now().toISOString() };
+      state.actions[key] = { account: definition.account, action: actionName, generation, season, cycle: Math.floor(season / 3), tx: transactionHash(result), at: now().toISOString() };
       const status = statusByAccount.get(definition.account);
       Object.assign(status, update(transactionHash(result)));
       status.lastError = null;
@@ -200,29 +251,53 @@ export function createBots({
 
   function needsStake(boat) {
     if (!boat) return true;
-    const stake = boat.stake ?? boat.stake_amount;
+    const stake = boat.stake ?? boat.stake_amount ?? boat.boat?.stake;
     return stake !== undefined && valueAsBigInt(stake) <= 0n;
   }
 
   async function prepareBot(definition, sea) {
     const season = numberValue(sea.season);
+    const generation = strategy.generation;
     const status = statusByAccount.get(definition.account);
     const boat = await callView('get_boat', { account_id: definition.account });
     status.exiledUntil = boat?.exiled_until ?? null;
     state.accounts[definition.account] = status;
 
     if (needsStake(boat)) {
-      const stakeKey = `${definition.account}:stake`;
+      const stakeKey = actionKey(definition, season, generation, 'stake');
       if (!state.actions[stakeKey]) {
-        await act(definition, season, 'stake', 'stake', { amount: BOT_STAKE_AMOUNT.toString() }, (tx) => ({
+        await act(definition, season, generation, 'stake', 'stake', { amount: BOT_STAKE_AMOUNT.toString() }, (tx) => ({
           lastStakeTx: tx,
         }));
       }
       return null;
     }
-    const stakeAction = state.actions[`${definition.account}:stake`];
-    if (stakeAction?.season === season) return null;
+    const stakeAction = state.actions[actionKey(definition, season, generation, 'stake')]
+      ?? (generation === 0 ? state.actions[`${definition.account}:stake`] : null);
+    if (stakeAction?.season === season && stakeAction?.generation === undefined) return null;
+    if (stakeAction?.season === season && stakeAction?.generation === generation) return null;
     return { definition, boat };
+  }
+
+  async function processReseed(definition, sea) {
+    if (definition.role === 'overfisher') return;
+    const season = numberValue(sea.season);
+    const generation = strategy.generation;
+    const status = statusByAccount.get(definition.account);
+    const key = actionKey(definition, season, generation, 'reseed');
+    if (state.actions[key] || status.reseedGeneration === generation) {
+      status.reseedContributed = true;
+      status.reseedGeneration = generation;
+      state.accounts[definition.account] = status;
+      return;
+    }
+    const balance = await callView('ft_balance_of', { account_id: definition.account });
+    if (valueAsBigInt(balance) < reseedShare) return;
+    await act(definition, season, generation, 'reseed', 'contribute_reseed', { amount: reseedShare.toString() }, (tx) => ({
+      reseedContributed: true,
+      reseedGeneration: generation,
+      lastReseedTx: tx,
+    }));
   }
 
   async function processGovernance({ definition, boat }, sea) {
@@ -237,7 +312,7 @@ export function createBots({
 
     if (assembly?.stage === 'hold') {
       const yes = definition.role !== 'overfisher' && indictments.length > 0;
-      await act(definition, season, 'vote', 'vote_hold', { yes }, () => ({ lastVoteCycle: cycle }));
+      await act(definition, season, strategy.generation, 'vote', 'vote_hold', { yes }, () => ({ lastVoteCycle: cycle }));
       return;
     }
 
@@ -250,12 +325,12 @@ export function createBots({
       .slice(0, 3)
       .map(([account]) => account);
     if (names.length === 0) return;
-    await act(definition, season, 'shard', 'write_shard', { names }, () => ({ lastShardCycle: cycle }));
+    await act(definition, season, strategy.generation, 'shard', 'write_shard', { names }, () => ({ lastShardCycle: cycle }));
   }
 
   async function processFishing(entries, sea) {
     const season = numberValue(sea.season);
-    if (strategy.stock === null || strategy.floorActive) return;
+    if (strategy.stock === null || strategy.floorActive || strategy.phase === 'Wrecked' || strategy.lostForever) return;
     const cycle = numberValue(sea.cycle, Math.floor(season / 3));
     const ordered = [...entries].sort(({ definition: left }, { definition: right }) => {
       return left.role === 'overfisher' ? -1 : right.role === 'overfisher' ? 1 : 0;
@@ -265,7 +340,7 @@ export function createBots({
       if (definition.role === 'overfisher' && cycle % 2 !== 0) continue;
       const effort = effortForRole(boat, definition.role);
       if (effort === 0) continue;
-      await act(definition, season, 'fish', 'fish', { effort_bps: effort }, (tx) => ({
+      await act(definition, season, strategy.generation, 'fish', 'fish', { effort_bps: effort }, (tx) => ({
         lastSeasonFished: season,
         lastCatchTx: tx,
         lastEffortBps: effort,
@@ -276,13 +351,29 @@ export function createBots({
   function updateStrategy(sea) {
     const rawStock = sea.stock_fish ?? sea.stock;
     const stock = Number(rawStock);
+    const levels = levelsForCapacity(sea.carrying_capacity);
+    const generation = Number.isSafeInteger(Number(sea.generation)) ? Number(sea.generation) : 0;
+    const phase = phaseValue(sea.phase);
+    const alleeThreshold = numberValue(sea.allee_threshold, 0);
+    const lostForever = phase === 'sea_lost_forever' || sea.sea_lost_forever === true || sea.lost_forever === true
+      || (phase === 'Wrecked' && sea.dead === true && alleeThreshold > 0 && levels.capacity <= alleeThreshold);
+    strategy.capacity = levels.capacity;
+    strategy.sustainable = levels.sustainable;
+    strategy.floor = phase === 'Recovering' ? levels.recovery : levels.floor;
+    strategy.generation = generation;
+    strategy.phase = lostForever ? 'sea_lost_forever' : phase;
+    strategy.lostForever = lostForever;
+    for (const status of statusByAccount.values()) {
+      if (status.reseedGeneration !== generation) status.reseedContributed = false;
+    }
     strategy.stock = Number.isFinite(stock) ? stock : null;
     if (strategy.stock === null) {
       strategy.floorActive = state.floorActive;
       return;
     }
-    if (stock < FLOOR_TRIGGER_STOCK) state.floorActive = true;
-    else if (state.floorActive && stock > FLOOR_RECOVERY_STOCK) state.floorActive = false;
+    const trigger = phase === 'Recovering' ? levels.recovery : levels.floor;
+    if (stock < trigger) state.floorActive = true;
+    else if (state.floorActive && stock > levels.recovery) state.floorActive = false;
     strategy.floorActive = state.floorActive;
   }
 
@@ -308,9 +399,24 @@ export function createBots({
       }
       const sea = await callView('get_sea');
       updateStrategy(sea);
+      if (strategy.lostForever) {
+        await persist();
+        return;
+      }
       if (numberValue(sea?.seasons_behind) > 30) {
         await persist();
         return;
+      }
+      if (strategy.phase === 'Wrecked') {
+        for (const definition of BOT_DEFINITIONS) {
+          if (!available.has(definition.account)) continue;
+          try {
+            await processReseed(definition, sea);
+          } catch (error) {
+            await saveError(definition.account, error);
+            logger.error?.(`tide bot error account=${definition.account} action=reseed: ${errorMessage(error)}`);
+          }
+        }
       }
       const prepared = [];
       for (const definition of BOT_DEFINITIONS) {
@@ -326,6 +432,7 @@ export function createBots({
       await processFishing(prepared, sea);
       for (const entry of prepared) {
         try {
+          if (strategy.phase === 'Wrecked') continue;
           await processGovernance(entry, sea);
         } catch (error) {
           await saveError(entry.definition.account, error);
@@ -347,7 +454,13 @@ export function createBots({
       accounts: BOT_DEFINITIONS.map(({ account }) => ({ ...statusByAccount.get(account) })),
       lastRunAt: state.lastRunAt,
       stock: strategy.stock,
+      generation: strategy.generation,
+      phase: strategy.phase,
+      capacity: strategy.capacity,
+      sustainable: strategy.sustainable,
+      floor: strategy.floor,
       floorActive: strategy.floorActive,
+      seaLostForever: strategy.lostForever,
     };
   }
 

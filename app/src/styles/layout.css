@@ -73,6 +73,19 @@ nav a.active {
   gap: 9px;
 }
 
+.generation-chip {
+  display: grid;
+  min-height: 38px;
+  padding: 5px 9px;
+  border: 1px solid var(--ink);
+  background: var(--marker);
+}
+
+.generation-chip b,
+.generation-chip span {
+  font: 800 9px JetBrains Mono;
+}
+
 .season-chip,
 .wallet-chip {
   display: flex;
@@ -283,6 +296,10 @@ nav a.active {
 
   .season-chip {
     min-width: 0;
+  }
+
+  .generation-chip {
+    display: none;
   }
 
   .connect-chip {

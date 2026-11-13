@@ -104,7 +104,7 @@ export type AssemblyHistory = {
 export type TideEvent = Record<string, unknown> & {
   event?: string;
   account?: string;
-  data?: { memo?: unknown };
+  data?: Record<string, unknown> & { memo?: unknown };
   season?: number;
 };
 

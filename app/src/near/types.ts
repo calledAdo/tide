@@ -40,7 +40,36 @@ export type SeaView = {
   burned_fuel: U128Like;
   burned_build: U128Like;
   burned_shards: U128Like;
+  recovery_burned: U128Like;
   total_supply: U128Like;
+  generation: number;
+  phase: SeaPhase;
+  reseed_fund: U128Like;
+  reseed_cost: U128Like;
+  reseed_deadline_season: number | null;
+  recovery_until_season: number | null;
+};
+
+export type SeaPhase = 'Fishing' | 'Wrecked' | 'Recovering';
+
+export type ReckoningHistory = {
+  generation: number;
+  died_season: number;
+  burned_total: U128Like;
+  boats_wrecked: number;
+  reseeded_season: number | null;
+  funded: boolean;
+};
+
+export type ReckoningView = {
+  generation: number;
+  phase: SeaPhase;
+  wreck_season: number | null;
+  reseed_fund: U128Like;
+  reseed_cost: U128Like;
+  contributors: Array<[string, U128Like]>;
+  deadline_season: number | null;
+  history: ReckoningHistory[];
 };
 
 export type AssemblyResult = {
@@ -92,6 +121,7 @@ export type TideSnapshot = {
   playerStorage: JsonObject | null;
   nearBalance: string;
   history: HistoryPoint[];
+  reckoning: ReckoningView | null;
   loading: boolean;
   error: string;
   stale: boolean;

@@ -1,5 +1,6 @@
 import { formatAccountAddress, type WalletSnapshot } from '../near/wallet';
 import type { TideSnapshot } from '../near/types';
+import { asString } from '../near/types';
 import { compactNumber, unitsToNumber, TIDE_DECIMALS } from '../lib/format';
 import { assemblyStage, boatCanFishAtSeason, useSeasonClock } from './shared';
 
@@ -48,6 +49,10 @@ export function TopBar({ snapshot, wallet, onConnect, onOpenPanel }: Props) {
         <a href="#/how" className={href === '#/how' ? 'active' : ''}>HOW</a>
       </div>
       <div className="topbar-actions">
+        {snapshot.sea && <div className="generation-chip">
+          <b>GENERATION {snapshot.sea.generation}</b>
+          <span>CAPACITY {compactNumber(Number(asString(snapshot.sea.carrying_capacity)))}</span>
+        </div>}
         {wallet.account ? (
           <button className="wallet-chip" onClick={onOpenPanel} aria-label="Open wallet panel">
             <b>{formatAccountAddress(wallet.account)}</b>

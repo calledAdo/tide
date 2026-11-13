@@ -341,3 +341,24 @@ test('active assembly history filters before applying the limit', () => {
   assert.deepEqual(indexes.assemblies(2, true).map((assembly) => assembly.cycle), [5, 4]);
   assert.deepEqual(indexes.assemblies(10, true).map((assembly) => assembly.cycle), [5, 4, 2]);
 });
+
+test('generation history aggregates reckoning, wrecks, reseeding, and contributors', () => {
+  const indexes = createDerivedIndexes();
+  const add = (height, event, data) => indexes.add({ height, ts: height * 1000, tx: `tx-${height}`, standard: 'tide', event, data });
+  add(1, 'reckoning', { generation: 1, season: 42, boats_wrecked: 2, burned_total: '900' });
+  add(2, 'boat_wrecked', { account: 'alice.testnet', burned: '400' });
+  add(3, 'boat_wrecked', { account: 'bob.testnet', burned: '500' });
+  add(4, 'reseed_contribution', { account: 'alice.testnet', amount: '150' });
+  add(5, 'reseed_contribution', { account: 'bob.testnet', amount: '150' });
+  add(6, 'reseeded', { generation: 1, season: 43, funded: true });
+
+  assert.deepEqual(indexes.generations(), [{
+    generation: 1,
+    diedSeason: 42,
+    boatsWrecked: 2,
+    burnedTotal: '900',
+    reseededSeason: 43,
+    funded: true,
+    contributors: [['alice.testnet', '150'], ['bob.testnet', '150']],
+  }]);
+});

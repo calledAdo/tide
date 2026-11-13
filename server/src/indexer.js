@@ -99,6 +99,21 @@ function createAssembly(cycle) {
   return { cycle, held: null, holdYes: 0, holdNo: 0, eligible: 0, shards: {}, exiled: [], closedAt: null };
 }
 
+function createGeneration(generation) {
+  return {
+    generation,
+    diedSeason: null,
+    boatsWrecked: 0,
+    burnedTotal: '0',
+    reseededSeason: null,
+    funded: false,
+    contributors: new Map(),
+    wreckedAccounts: new Set(),
+    hasWreckCount: false,
+    hasBurnedTotal: false,
+  };
+}
+
 function sortNewest(records) {
   return [...records].sort((a, b) => b.height - a.height || b.ts - a.ts || String(b.tx).localeCompare(String(a.tx)));
 }
@@ -110,7 +125,18 @@ export function createDerivedIndexes() {
     eventPositions: new Map(),
     boats: new Map(),
     assemblies: new Map(),
+    generations: new Map(),
   };
+
+  function generationForRecord(record, data) {
+    const explicit = asNumber(data.generation ?? data.generation_id);
+    if (explicit !== null) return explicit;
+    if (!['boat_wrecked', 'reseed_contribution'].includes(record.event)) return null;
+    const reckoning = state.events
+      .filter((item) => item.event === 'reckoning' && (asNumber(item.height) === null || asNumber(item.height) <= asNumber(record.height)))
+      .sort((left, right) => asNumber(right.height, -1) - asNumber(left.height, -1))[0];
+    return reckoning ? asNumber(reckoning.data?.generation ?? reckoning.data?.generation_id) : null;
+  }
 
   function indexRecord(record) {
     const data = record.data ?? {};
@@ -142,11 +168,60 @@ export function createDerivedIndexes() {
         }
       }
     }
+    if (['reckoning', 'boat_wrecked', 'reseed_contribution', 'reseeded'].includes(record.event)) {
+      const generation = generationForRecord(record, data);
+      if (generation === null) return;
+      if (!state.generations.has(generation)) state.generations.set(generation, createGeneration(generation));
+      const entry = state.generations.get(generation);
+      if (record.event === 'reckoning') {
+        const diedSeason = asNumber(data.died_season ?? data.season);
+        if (diedSeason !== null) entry.diedSeason = diedSeason;
+        const boatsWrecked = asNumber(data.boats_wrecked ?? data.boats ?? data.wrecked);
+        if (boatsWrecked !== null) {
+          entry.boatsWrecked = boatsWrecked;
+          entry.hasWreckCount = true;
+        }
+        const burned = data.burned_total ?? data.burned;
+        if (burned !== undefined) {
+          entry.burnedTotal = amount(burned);
+          entry.hasBurnedTotal = true;
+        }
+      } else if (record.event === 'boat_wrecked') {
+        const account = data.account ?? data.owner_id;
+        if (typeof account === 'string' && account) entry.wreckedAccounts.add(account);
+        if (!entry.hasWreckCount) entry.boatsWrecked = entry.wreckedAccounts.size;
+        if (!entry.hasBurnedTotal && (data.burned ?? data.burned_total ?? data.stake_burned) !== undefined) {
+          entry.burnedTotal = addAmounts(entry.burnedTotal, amount(data.burned ?? data.burned_total ?? data.stake_burned));
+        }
+        const diedSeason = asNumber(data.died_season ?? data.season);
+        if (entry.diedSeason === null && diedSeason !== null) entry.diedSeason = diedSeason;
+      } else if (record.event === 'reseed_contribution') {
+        const account = data.account ?? data.owner_id;
+        const contribution = amount(data.amount ?? data.contribution);
+        if (typeof account === 'string' && account) {
+          const previous = entry.contributors.get(account) ?? '0';
+          entry.contributors.set(account, addAmounts(previous, contribution));
+        }
+      } else {
+        const reseededSeason = asNumber(data.reseeded_season ?? data.season);
+        if (reseededSeason !== null) entry.reseededSeason = reseededSeason;
+        if (data.funded !== undefined) entry.funded = data.funded;
+        else if (data.amount !== undefined) entry.funded = data.amount;
+        else entry.funded = true;
+        if (entry.contributors.size === 0 && Array.isArray(data.contributors)) {
+          for (const contributor of data.contributors) {
+            if (!Array.isArray(contributor) || typeof contributor[0] !== 'string') continue;
+            entry.contributors.set(contributor[0], amount(contributor[1]));
+          }
+        }
+      }
+    }
   }
 
   function rebuildDerivedIndexes() {
     state.boats.clear();
     state.assemblies.clear();
+    state.generations.clear();
     for (const record of state.events) indexRecord(record);
   }
 
@@ -248,6 +323,21 @@ export function createDerivedIndexes() {
     }).slice(0, 50);
   }
 
+  function generations(limit = 20) {
+    return [...state.generations.values()]
+      .sort((left, right) => right.generation - left.generation)
+      .slice(0, limit)
+      .map((entry) => ({
+        generation: entry.generation,
+        diedSeason: entry.diedSeason,
+        boatsWrecked: entry.boatsWrecked,
+        burnedTotal: entry.burnedTotal,
+        reseededSeason: entry.reseededSeason,
+        funded: entry.funded,
+        contributors: [...entry.contributors.entries()],
+      }));
+  }
+
   return {
     add,
     has: (record) => state.eventPositions.has(eventIdentity(record)),
@@ -270,6 +360,7 @@ export function createDerivedIndexes() {
       return records.map((assembly) => ({ ...assembly, shards: { ...assembly.shards }, exiled: [...assembly.exiled], closedAt: assembly.closedAt && { ...assembly.closedAt } }));
     },
     leaderboard,
+    generations,
   };
 }
 
@@ -527,6 +618,7 @@ export function createIndexer({
     boatHistory: (account) => indexes.boatHistory(account),
     assemblies: (limit, active) => indexes.assemblies(limit, active),
     leaderboard: (by) => indexes.leaderboard(by),
+    generations: (limit) => indexes.generations(limit),
     parseEvents,
   };
 }

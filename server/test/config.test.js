@@ -17,6 +17,7 @@ test('loads defaults and parses onboarding values', () => {
   assert.equal(config.fastNearTxUrl, 'https://tx.test.fastnear.com');
   assert.equal(config.indexerPollMs, 10000);
   assert.equal(config.indexerSweepMs, 300000);
+  assert.equal(config.reseedBotShare, 150_000n * 10n ** 18n);
   assert.equal(config.onboardNearYocto, 500_000_000_000_000_000_000_000n);
   assert.deepEqual(config.frontendOrigins, ['https://tide-near.vercel.app', 'http://localhost:5173']);
 });

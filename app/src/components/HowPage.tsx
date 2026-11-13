@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
-import { CONTRACT, DEAD_SEA, EXPLORER } from '../config';
-import type { Params } from '../near/types';
+import { CONTRACT, EXPLORER } from '../config';
+import type { Params, ReckoningView, SeaView } from '../near/types';
+import { asString } from '../near/types';
+import { compactNumber, formatTide } from '../lib/format';
 
 const lessons = [
   ['01', 'CLAIM THE WATER', 'Claim 100,000 TIDE once, then turn it into a boat.'],
@@ -22,10 +24,18 @@ const lessons = [
   ],
 ] as const;
 
-export function HowPage({ params }: { params: Params | null }) {
+export function HowPage({
+  params,
+  sea,
+  reckoning,
+}: {
+  params: Params | null;
+  sea: SeaView | null;
+  reckoning: ReckoningView | null;
+}) {
   useEffect(() => {
-    if (location.hash.includes('first-sea-died')) {
-      document.getElementById('first-sea-died')?.scrollIntoView();
+    if (location.hash.includes('generations')) {
+      document.getElementById('generations')?.scrollIntoView();
     }
   }, []);
 
@@ -63,27 +73,59 @@ export function HowPage({ params }: { params: Params | null }) {
           )}
         </dl>
       </div>
-      <section className="wreck-exhibit" id="first-sea-died">
-        <p className="eyebrow">ON-CHAIN EXHIBIT · SEASON {DEAD_SEA.diedSeason}</p>
-        <h2>THE FIRST SEA DIED.</h2>
+      <section className="wreck-exhibit generations" id="generations">
+        <p className="eyebrow">THE IMMUTABLE LEDGER · LIVE FROM GET_RECKONING()</p>
+        <h2>THE GENERATIONS.</h2>
         <p>
-          The first $TIDE sea is dead. Six demo captains fished it a little harder than it could
-          regrow, about 77,500 fish a season against 73,155 of growth. The gap compounded, the
-          stock crossed the point of no return, and on day 1103 the contract stopped minting for
-          ever. Nothing can restart it: the rule is in the contract and the contract has no keys.
+          Every collapse is recorded here. A funded reseed starts the next sea at 70% of its
+          then-capacity; a missed deadline limps back near the point of no return. Each generation
+          is permanently smaller, so the community can still lose the game for ever.
         </p>
-        <p>Its final stock was 28 fish.</p>
-        <p>That is the whole thesis, demonstrated on a public chain rather than in a simulation.</p>
+        <div className="generation-ledger" role="table" aria-label="Generation history">
+          <div className="generation-row generation-head" role="row">
+            <span>GEN</span><span>DIED</span><span>BOATS</span><span>TIDE BURNED</span>
+            <span>RESEED</span><span>CAPACITY THAT FOLLOWED</span>
+          </div>
+          {!reckoning?.history.length && (
+            <p className="generation-empty">No generation has wrecked yet.</p>
+          )}
+          {reckoning?.history.map((item) => {
+            const nextGeneration = reckoning.generation === item.generation + 1;
+            const nextCapacity = nextGeneration && sea
+              ? Number(asString(sea.carrying_capacity))
+              : null;
+            return (
+              <div
+                className="generation-row"
+                role="row"
+                key={`${item.generation}-${item.died_season}`}
+              >
+                <span>{item.generation}</span>
+                <span>DAY {item.died_season}</span>
+                <span>{item.boats_wrecked}</span>
+                <span>{formatTide(asString(item.burned_total))}</span>
+                <span className={item.funded ? 'funded' : 'missed'}>
+                  {item.reseeded_season === null ? 'PENDING' : item.funded ? 'FUNDED' : 'MISSED'}
+                </span>
+                <span>
+                  {nextCapacity !== null
+                    ? `${compactNumber(nextCapacity)} FISH`
+                    : item.funded ? '70% OF THEN-CAPACITY' : 'NEAR POINT OF NO RETURN'}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <p className="wreck-change">
+          A final grab is worth ~8,000 TIDE. A wreck costs ~4.95M TIDE: collapse is ~594× against
+          the raider. The punishment is collective because the fleet must police itself.
+        </p>
         <div className="wreck-links">
-          <a href={`${EXPLORER}/address/${DEAD_SEA.contract}`} target="_blank" rel="noreferrer">
-            DEAD CONTRACT ON EXPLORER ↗
+          <a href={`${EXPLORER}/address/${CONTRACT}`} target="_blank" rel="noreferrer">
+            CURRENT GENERATION ON EXPLORER ↗
           </a>
           <a href="#/replay?scenario=lawless">REPLAY · LAWLESS SEA ↗</a>
         </div>
-        <p className="wreck-change">
-          What changed: the demo bots now fish inside the sea&apos;s growth and stop entirely below
-          twice the point of no return; human players are not limited.
-        </p>
       </section>
       <div className="why-near">
         <b>WHY NEAR</b>

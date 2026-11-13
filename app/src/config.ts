@@ -1,4 +1,4 @@
-export const CONTRACT = 'sea-1794591365.tide-sponsor-53394.testnet';
+export const CONTRACT = 'sea.tide-fund-94145.testnet';
 export const DEAD_SEA = {
   contract: 'tide-1794517191.memethis-t40-demo.testnet',
   diedSeason: 1103,

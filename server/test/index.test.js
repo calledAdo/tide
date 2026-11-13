@@ -69,3 +69,21 @@ test('/health exposes the indexer gap', async () => {
   assert.equal(result.body.gap, 3);
   assert.equal(result.body.indexer.gap, 3);
 });
+
+test('/generations forwards the query limit', async () => {
+  const calls = [];
+  const handler = createHandler({
+    config: { frontendOrigins: [] },
+    near: {},
+    limiter: {},
+    keeper: {},
+    indexer: { generations(limit) { calls.push(limit); return [{ generation: 1 }]; } },
+  });
+  const result = response();
+
+  await handler({ method: 'GET', url: '/generations?limit=7', headers: {} }, result);
+
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, [{ generation: 1 }]);
+  assert.deepEqual(calls, [7]);
+});

@@ -11,7 +11,7 @@ import type { TideWallet, WalletSnapshot } from '../near/wallet';
 import { callWithStorageRegistration, type StorageClient } from '../near/registration';
 import { tideAmountExceedsBalance, tideUnits } from '../config';
 import { compactNumber, formatTide } from '../lib/format';
-import { RunAction, seconds, shortName, useSeasonClock } from './shared';
+import { RunAction, seaPhase, seconds, shortName, useSeasonClock } from './shared';
 import { YourDay } from './YourDay';
 
 type Props = {
@@ -42,6 +42,7 @@ export function BoatPage({
   const [amount, setAmount] = useState('10000');
   const [history, setHistory] = useState<BoatHistory | null>(null);
   const [failed, setFailed] = useState(false);
+  const [wreckReport, setWreckReport] = useState<{ burned: string; returned: string } | null>(null);
   const [actionProgress, setActionProgress] = useState('');
   const clock = useSeasonClock(snapshot.sea);
   useEffect(() => {
@@ -53,7 +54,26 @@ export function BoatPage({
       if (live) setFailed(true);
     });
     return () => { live = false; };
-  }, [account, snapshot.sea?.season]);
+  }, [account, snapshot.sea?.season, snapshot.sea?.phase]);
+  useEffect(() => {
+    if (!account || seaPhase(snapshot.sea) !== 'Wrecked') {
+      setWreckReport(null);
+      return undefined;
+    }
+    let live = true;
+    void historyApi.events(
+      `?event=boat_wrecked&account=${encodeURIComponent(account)}&limit=20`,
+    ).then((events) => {
+      const event = events.find((item) => item.data?.account === account);
+      const burned = event?.data?.burned;
+      const returned = event?.data?.returned;
+      if (live && (typeof burned === 'string' || typeof burned === 'number')
+        && (typeof returned === 'string' || typeof returned === 'number')) {
+        setWreckReport({ burned: String(burned), returned: String(returned) });
+      }
+    }).catch(() => undefined);
+    return () => { live = false; };
+  }, [account, snapshot.sea?.phase, snapshot.reckoning?.wreck_season]);
   const call = (label: string, method: string, args: Record<string, unknown>) => run(
     label,
     async () => {
@@ -87,10 +107,12 @@ export function BoatPage({
   const progress = hasBoat ? Math.min(100, stake / (nextStake * 1e18) * 100) : 0;
   const amountTooMuch = tideAmountExceedsBalance(amount, snapshot.playerBalance);
   const currentSeason = clock.season;
+  const phase = seaPhase(snapshot.sea);
   const exiled = boat?.exiled_until && boat.exiled_until > currentSeason;
   const indicted = snapshot.indictments.some(([name]) => name === account);
   const blocked = exiled
     ? `EXILED UNTIL DAY ${boat?.exiled_until}`
+    : phase === 'Wrecked' ? 'SEA WRECKED'
     : indicted ? 'INDICTED UNTIL ASSEMBLY CLOSES'
     : boat?.boat.stake_season === currentSeason ? 'BUILT TODAY' : '';
   const latest = history?.trips.at(-1);
@@ -117,7 +139,7 @@ export function BoatPage({
           <div><p className="eyebrow">01 · TODAY</p><h2>THE FISHING DECISION</h2></div>
         </div>
         <YourDay wallet={wallet} walletApi={walletApi} snapshot={snapshot} onConnect={onConnect}
-          run={run} onRefresh={onRefresh} />
+          run={run} onRefresh={onRefresh} wreckReport={wreckReport} />
       </section>
       <section className="boat-section maintenance-section">
         <p className="eyebrow">02 · MAINTENANCE</p>

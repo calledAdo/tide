@@ -1,14 +1,13 @@
 import type { HistoryPoint, SeaView } from '../near/types';
 import { asString } from '../near/types';
 import { compactNumber } from '../lib/format';
-import { TideSim } from '../sim/engine';
 
 type Future = { values: number[]; deadAt: number | null };
 
 function future(
   stock: number,
   dailyEffort: number,
-  stake: number,
+  capacity: number,
   allee: number,
   fairCatchAmount = 0,
 ): Future {
@@ -18,8 +17,9 @@ function future(
   for (let day = 1; day <= 30; day += 1) {
     const catchAmount = fairCatchAmount > 0
       ? fairCatchAmount
-      : TideSim.catchAtEffort(current, stake, stake, dailyEffort);
-    current = Math.max(0, current - catchAmount + TideSim.growth(current));
+      : Math.max(0, dailyEffort * 0.25 * current);
+    const growth = 0.6 * current * (1 - current / capacity) * (current - allee) / capacity;
+    current = Math.max(0, current - catchAmount + growth);
     values.push(current);
     if (current < allee && deadAt === null) deadAt = day;
   }
@@ -44,15 +44,16 @@ function line(values: number[], max: number, start: number, end: number): string
 export function ProjectionPanel({ sea, history }: { sea: SeaView | null; history: HistoryPoint[] }) {
   if (!sea) return null;
   const stock = Number(asString(sea.stock_fish));
+  const capacity = Math.max(1, Number(asString(sea.carrying_capacity)));
   const allee = Number(asString(sea.allee_threshold));
   const stake = Number(asString(sea.staked_total || sea.fleet_snapshot));
   const quota = Number(asString(sea.quota_per_season));
   const actualCatch = Number(asString(sea.caught_this_season));
   const actualEffort = quota > 0 ? Math.min(1.5, Math.max(0, actualCatch / quota)) : 0;
-  const fairCatchAmount = TideSim.fairCatch(stake, stake);
-  const share = future(stock, 0, stake, allee, fairCatchAmount);
-  const flat = future(stock, 1, stake, allee);
-  const actual = future(stock, actualEffort, stake, allee);
+  const fairCatchAmount = quota * (stake > 0 ? 1 : 0);
+  const share = future(stock, 0, capacity, allee, fairCatchAmount);
+  const flat = future(stock, 1, capacity, allee);
+  const actual = future(stock, actualEffort, capacity, allee);
   const data = history.slice(-30).map((point) => point.stock).concat([stock]);
   const max = Math.max(1, ...data, ...share.values, ...flat.values, ...actual.values);
   const start = data.length > 1 ? 8 + ((data.length - 1) / (data.length + 29)) * 270 : 8;

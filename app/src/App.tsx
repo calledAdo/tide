@@ -130,7 +130,8 @@ export default function App() {
     setToasts((items) => items.filter((item) => item.id !== id));
   }, []);
   const content = route === 'sea'
-    ? <PlayPage wallet={walletState} snapshot={snapshot} />
+    ? <PlayPage wallet={walletState} walletApi={wallet} snapshot={snapshot} run={run}
+      onRefresh={refresh} />
     : route === 'harbour'
       ? <HarbourPage snapshot={snapshot} account={walletState.account} />
       : route === 'agora'
@@ -139,7 +140,8 @@ export default function App() {
         : route === 'boat'
           ? <BoatPage wallet={walletState} walletApi={wallet} snapshot={snapshot}
             tideClient={client} onConnect={connect} run={run} onRefresh={refresh} />
-          : route === 'replay' ? <ReplayPage /> : <HowPage params={snapshot.params} />;
+          : route === 'replay' ? <ReplayPage /> : <HowPage params={snapshot.params}
+            sea={snapshot.sea} reckoning={snapshot.reckoning} />;
   return <>
     <TopBar snapshot={snapshot} wallet={walletState} onConnect={connect}
       onOpenPanel={() => setPanel(true)} />

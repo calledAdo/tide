@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { AssemblyView, SeaView } from '../near/types';
-import { assemblyStage, seconds } from './shared';
+import { asString } from '../near/types';
+import { compactNumber } from '../lib/format';
+import { assemblyStage, seaPhase, seconds } from './shared';
 
 type Props = { sea: SeaView | null; assembly: AssemblyView | null };
 
@@ -19,21 +21,31 @@ export function SeasonTimeline({ sea, assembly }: Props) {
   if (!sea) return <div className="timeline timeline-loading">THE SEA CLOCK IS LOADING</div>;
   const current = sea.season;
   const stage = assemblyStage(sea, assembly);
+  const phase = seaPhase(sea);
   const countdown = Math.max(0, sea.seconds_left_in_season - Math.floor((now - started) / 1000));
   return (
     <div className="timeline" aria-label="Season timeline">
+      <div className="timeline-identity">
+        GENERATION {sea.generation} · CAPACITY {compactNumber(
+          Number(asString(sea.carrying_capacity)),
+        )}
+      </div>
       <div className="timeline-track">
         {Array.from({ length: 6 }, (_, index) => {
           const day = current + index;
           const assemblyDay = day % 3 === 2;
           const active = index === 0;
-          const phase = active && assemblyDay
+          const dayPhase = active && phase === 'Wrecked'
+            ? 'WRECKED'
+            : active && phase === 'Recovering'
+              ? 'RECOVERING'
+              : active && assemblyDay
             ? stage === 'shards'
               ? `FISHING · NAMING ${seconds(countdown)}`
               : stage === 'hold'
                 ? `FISHING · VOTE ${seconds(countdown)}`
                 : `FISHING · VOTE OPENS ${seconds(countdown)}`
-            : active ? `FISHING · ${seconds(countdown)}` : 'FISH';
+              : active ? `FISHING · ${seconds(countdown)}` : 'FISH';
           const description = assemblyDay
             ? 'You can still fish. The assembly also meets: first half to agree to hold one, '
               + 'second half to name who to banish.'
@@ -43,13 +55,13 @@ export function SeasonTimeline({ sea, assembly }: Props) {
               className={`timeline-cell ${assemblyDay ? 'is-assembly' : ''} ${active ? 'is-current' : ''}`}
               key={day}
               title={description}
-              aria-label={`Day ${day}, ${phase}. ${description}`}
+              aria-label={`Day ${day}, ${dayPhase}. ${description}`}
               aria-expanded={tip === day}
               onClick={() => setTip(tip === day ? null : day)}
             >
               <span>DAY {day} · FISH</span>
               {assemblyDay && <small className="assembly-chip">⚖ ASSEMBLY</small>}
-              <b>{phase}</b>
+              <b>{dayPhase}</b>
               {active && <i style={{
                 width: `${Math.max(3, (sea.seconds_left_in_season / sea.season_len_sec) * 100)}%`,
               }} />}

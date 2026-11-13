@@ -147,6 +147,51 @@ test('the sea floor stops every bot until stock is above the recovery level', as
   assert.equal(bots.status().floorActive, false);
 });
 
+test('wrecked bots reseed once per generation and never fish', async () => {
+  const dataDir = await directory();
+  const sends = [];
+  const sea = { season: 12, generation: 1, phase: 'Wrecked', carrying_capacity: 2_000_000, stock_fish: 0, seasons_behind: 0 };
+  const bots = createBots({
+    config: config(dataDir),
+    view: async (method) => {
+      if (method === 'get_sea') return sea;
+      if (method === 'ft_balance_of') return '150000000000000000000000';
+      return strategicBoat();
+    },
+    send: async (account, method, args) => { sends.push({ account, method, args }); return `tx-${sends.length}`; },
+  });
+
+  await bots.run();
+  await bots.run();
+
+  assert.equal(sends.filter(({ method }) => method === 'fish').length, 0);
+  assert.equal(sends.filter(({ method }) => method === 'contribute_reseed').length, 5);
+  assert.equal(sends.filter(({ method }) => method === 'contribute_reseed').every(({ args }) => args.amount === '150000000000000000000000'), true);
+  assert.equal(bots.status().capacity, 2_000_000);
+  assert.equal(bots.status().floor, 800_000);
+  assert.equal(bots.status().sustainable, 1_378_000);
+  assert.equal(bots.status().accounts.filter(({ reseedContributed }) => reseedContributed).length, 5);
+});
+
+test('a new generation gets a fresh stake action', async () => {
+  const dataDir = await directory();
+  const sends = [];
+  let generation = 0;
+  const bots = createBots({
+    config: config(dataDir),
+    view: async (method) => method === 'get_sea'
+      ? { season: generation * 10, generation, phase: 'Recovering', carrying_capacity: 1_000_000, stock_fish: 700_000, seasons_behind: 0 }
+      : null,
+    send: async (account, method, args) => { sends.push({ account, method, args }); return 'tx'; },
+  });
+
+  await bots.run();
+  generation = 1;
+  await bots.run();
+
+  assert.equal(sends.filter(({ method }) => method === 'stake').length, BOT_DEFINITIONS.length * 2);
+});
+
 test('honest captains vote yes only when the cycle has indictments', async () => {
   const votes = [];
   const runVotes = async (dataDir, indicted) => {
@@ -230,6 +275,7 @@ test('restart does not re-stake or double-fish a strategic season', async () => 
 });
 
 test('fixed bot rules keep a new sea above 600,000 for 500 seasons', () => {
+  const capacity = 1_000_000;
   let stock = 700_000;
   const fullCatch = 28_708;
   const fairShare = 20_000;
@@ -240,11 +286,25 @@ test('fixed bot rules keep a new sea above 600,000 for 500 seasons', () => {
     full_effort_catch: fullCatch,
   }));
   let floorActive = false;
-  let minimum = stock;
+  let minimumBeforeWreck = stock;
+  let reseedFund = 0;
+  let phase = 'Fishing';
   for (let season = 0; season < 500; season += 1) {
-    const growth = growthForStock(stock);
-    if (stock < 400_000) floorActive = true;
-    else if (floorActive && stock > 500_000) floorActive = false;
+    if (season === 250) {
+      phase = 'Wrecked';
+      stock = 0;
+      reseedFund = BOT_DEFINITIONS
+        .filter(({ role }) => role !== 'overfisher')
+        .reduce((total) => total + 150_000, 0);
+      assert.equal(reseedFund, 750_000);
+      stock = reseedFund >= 750_000 ? 500_000 : 0;
+      phase = stock > 0 ? 'Recovering' : 'Wrecked';
+      floorActive = true;
+    }
+    const growth = growthForStock(stock, capacity);
+    const floor = phase === 'Recovering' ? 0.5 * capacity : 0.4 * capacity;
+    if (stock < floor) floorActive = true;
+    else if (floorActive && stock > 0.5 * capacity) floorActive = false;
     const cycle = Math.floor(season / 3);
     const caught = floorActive ? 0 : boats.reduce((total, boat) => {
       if (boat.role === 'overfisher' && cycle % 2 !== 0) return total;
@@ -252,9 +312,11 @@ test('fixed bot rules keep a new sea above 600,000 for 500 seasons', () => {
       return total + Math.floor(boat.full_effort_catch * effort / 10_000);
     }, 0);
     stock = Math.max(0, stock + growth - caught);
-    minimum = Math.min(minimum, stock);
+    if (season < 250) minimumBeforeWreck = Math.min(minimumBeforeWreck, stock);
+    if (phase === 'Recovering' && !floorActive) phase = 'Fishing';
   }
-  assert.equal(minimum >= 600_000, true);
+  assert.equal(minimumBeforeWreck >= 600_000, true);
+  assert.equal(reseedFund > 0, true);
   assert.equal(stock > 0, true);
 });
 

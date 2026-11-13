@@ -3,7 +3,7 @@ import type { SeaView, TideSnapshot } from '../near/types';
 import { asString, boatHasStake } from '../near/types';
 import { CONTRACT } from '../config';
 import { compactNumber } from '../lib/format';
-import { shortName } from './shared';
+import { seaPhase, shortName } from './shared';
 import { readBotAccounts } from '../near/bots';
 
 type Props = {
@@ -25,23 +25,26 @@ export function FishSea({ sea, snapshot, account, onSelect }: Props) {
     return () => { live = false; };
   }, []);
   const stock = Number(asString(sea?.stock_fish));
-  const fishCount = Math.max(0, Math.min(50, Math.round(stock / 20_000)));
+  const capacity = Math.max(1, Number(asString(sea?.carrying_capacity)));
+  const fishCount = Math.max(0, Math.min(50, Math.round(stock / capacity * 50)));
   const boats = Object.entries(snapshot.boats).filter(([name, boat]) => {
     const until = snapshot.exiles.find(([item]) => item === name)?.[1] ?? boat?.exiled_until;
     if (name === CONTRACT || !boatHasStake(boat)) return false;
     return until === undefined || until === null || until <= (sea?.season ?? 0);
   });
   const exiled = new Map(snapshot.exiles);
-  const capacity = Math.max(1, Number(asString(sea?.carrying_capacity)));
   const depth = Math.max(5, Math.min(94, 100 - stock / capacity * 100));
+  const phase = seaPhase(sea);
   const activeExiles = [...exiled.entries()].filter(([, until]) => until > (sea?.season ?? 0));
   const visibleBoats = boats.slice(0, 18);
   return (
-    <section className={`sea-wrap ${sea?.dead ? 'dead-sea' : ''}`}>
+    <section className={`sea-wrap ${phase === 'Wrecked' ? 'dead-sea' : ''}`}>
       <div className="sea-heading">
         <div><p className="eyebrow">$TIDE · SHARED WATER</p><h1>THE SEA</h1></div>
         <div className="sea-heading-status">
-          <span className="sea-state">{sea?.dead ? 'EXTINCT' : 'LIVE FLEET'}</span>
+          <span className="sea-state">
+            {phase === 'Wrecked' ? 'WRECKED' : phase === 'Recovering' ? 'RECOVERING' : 'LIVE FLEET'}
+          </span>
           {snapshot.stale && <span className="sea-stale">STALE</span>}
         </div>
       </div>
@@ -121,7 +124,8 @@ export function FishSea({ sea, snapshot, account, onSelect }: Props) {
         </svg>
         <div className="depth-gauge">
           <span className="gauge-top">
-            SUSTAINABLE<br /><b>{compactNumber(Number(asString(sea?.msy_stock)))}</b>
+            CAPACITY<br /><b>{compactNumber(capacity)}</b><br />
+            MSY <b>{compactNumber(Number(asString(sea?.msy_stock)))}</b>
           </span>
           <i style={{ top: `${depth}%` }} />
           <span className="gauge-bottom">
@@ -129,15 +133,15 @@ export function FishSea({ sea, snapshot, account, onSelect }: Props) {
             <b>{compactNumber(Number(asString(sea?.allee_threshold)))}</b>
           </span>
         </div>
-        {sea?.dead && <div className="death-stamp">THE SEA<br />IS DEAD</div>}
+        {phase === 'Wrecked' && <div className="death-stamp">THE SEA<br />IS WRECKED</div>}
       </div>
       <div className="sea-caption">
         {boats.length} BOATS ON THE WATER · {activeExiles.length} ON EXILE ISLAND · CLICK A HULL
         TO INSPECT ITS CAPTAIN
       </div>
       <footer className="sea-footer">
-        <a href="#/how#first-sea-died">
-          This is the second sea. The first one died on day 1103 — read why.
+        <a href="#/how#generations">
+          Read THE GENERATIONS: every collapse leaves the next sea smaller.
         </a>
       </footer>
     </section>

@@ -7,6 +7,7 @@ import type {
   Indictment,
   JsonObject,
   Params,
+  ReckoningView,
   SeaView,
   TideSnapshot,
 } from './types';
@@ -25,6 +26,7 @@ const emptySnapshot: TideSnapshot = {
   playerStorage: null,
   nearBalance: '0',
   history: [],
+  reckoning: null,
   loading: true,
   error: '',
   stale: false,
@@ -340,7 +342,10 @@ export class TideClient {
   private async refreshOnce(): Promise<void> {
     try {
       this.emit({ loading: true, error: '' });
-      const sea = await this.view<SeaView>('get_sea');
+      const [sea, reckoning] = await Promise.all([
+        this.view<SeaView>('get_sea'),
+        this.view<ReckoningView>('get_reckoning'),
+      ]);
       const params = this.paramsLoaded && this.snapshot.params
         ? this.snapshot.params
         : await this.view<Params>('get_params');
@@ -425,6 +430,7 @@ export class TideClient {
         playerStorage,
         nearBalance,
         history,
+        reckoning,
         loading: false,
         error: '',
         stale: this.updateStale(failed),

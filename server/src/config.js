@@ -1,7 +1,7 @@
 import { nearToYocto } from 'near-api-js';
 
 // TIDE_CONTRACT remains environment-driven; this is the current demo value.
-export const DEMO_TIDE_CONTRACT = 'sea-1794591365.tide-sponsor-53394.testnet';
+export const DEMO_TIDE_CONTRACT = 'sea.tide-fund-94145.testnet';
 
 const DEFAULTS = {
   PORT: '3101',
@@ -16,6 +16,7 @@ const DEFAULTS = {
   KEEPER_ENABLED: 'true',
   BOTS_ENABLED: 'true',
   BOTS_INTERVAL_MS: '20000',
+  RESEED_BOT_SHARE: '150000',
   BOT_KEYS_FILE: '/etc/tide/bot-keys.json',
   INDEXER_ENABLED: 'true',
   FASTNEAR_TX_URL: 'https://tx.test.fastnear.com',
@@ -63,6 +64,15 @@ function nearAmount(raw, name) {
   }
 }
 
+function tideAmount(raw, name) {
+  const text = String(raw ?? '').trim();
+  if (!/^\d+(?:\.\d{1,18})?$/.test(text)) {
+    throw new Error(`${name} must be a valid non-negative TIDE amount.`);
+  }
+  const [whole, fraction = ''] = text.split('.');
+  return BigInt(whole) * 10n ** 18n + BigInt(fraction.padEnd(18, '0') || '0');
+}
+
 export function loadConfig(env = process.env) {
   const origins = required(env, 'FRONTEND_ORIGINS')
     .split(',')
@@ -95,6 +105,7 @@ export function loadConfig(env = process.env) {
     keeperEnabled: booleanValue(value(env, 'KEEPER_ENABLED'), 'KEEPER_ENABLED'),
     botsEnabled: booleanValue(value(env, 'BOTS_ENABLED'), 'BOTS_ENABLED'),
     botsIntervalMs: positiveInteger(value(env, 'BOTS_INTERVAL_MS'), 'BOTS_INTERVAL_MS'),
+    reseedBotShare: tideAmount(value(env, 'RESEED_BOT_SHARE'), 'RESEED_BOT_SHARE'),
     botKeysFile: value(env, 'BOT_KEYS_FILE'),
     indexerEnabled: booleanValue(value(env, 'INDEXER_ENABLED'), 'INDEXER_ENABLED'),
     fastNearTxUrl: value(env, 'FASTNEAR_TX_URL').replace(/\/$/, ''),
