@@ -385,10 +385,11 @@ The contract uses near-sdk 5.30.1, near-contract-standards, cargo-near, and near
 
 Big Shoulders Display, Inter Tight, and JetBrains Mono are bundled locally under
 `app/public/fonts/` and licensed under the SIL Open Font License 1.1. The app's visual style is an
-editorial/brutalist theme shared with the author's other NEAR app. Briefs 01-33 are in `briefs/`.
+editorial/brutalist theme shared with the author's other NEAR app.
 
 Design, specifications, and review by the author with Claude Code; implementation delegated to
-Codex from those briefs. All code was written during the hackathon (from 2026-11-12).
+OpenAI Codex from written specifications, then reviewed and tested by the author. All code was
+written during the hackathon (from 2026-11-12).
 
 ## Repository layout
 
@@ -465,62 +466,6 @@ Codex from those briefs. All code was written during the hackathon (from 2026-11
 │   ├── src/styles/tokens.css # Design tokens
 │   ├── tsconfig.json # TypeScript configuration
 │   └── vite.config.ts # Vite configuration
-├── briefs/ # Design and implementation briefs
-│   ├── 01-fix-test-and-build.md # Initial build and test brief
-│   ├── 01b-abi-schema.md # ABI schema brief
-│   ├── 02-web-page.md # Web page brief
-│   ├── 03-readme-and-scripts.md # README and scripts brief
-│   ├── 04-review-fixes.md # Review fixes brief
-│   ├── 05-readable-web.md # Readable web brief
-│   ├── 05b-refactor-regressions.md # Regression refactor brief
-│   ├── 06-restyle-editorial.md # Editorial restyle brief
-│   ├── 07-repo-metadata.md # Repository metadata brief
-│   ├── 08-funding-env.md # Funding environment brief
-│   ├── 09-demo-relative-seasons.md # Demo timing brief
-│   ├── 10-demo-timing-and-live-chart.md # Demo chart brief
-│   ├── 11-live-assembly-and-readme.md # Live assembly brief
-│   ├── 12-stale-exiles-and-url.md # Stale exile brief
-│   ├── 12b-history-is-history.md # History brief
-│   ├── 13-playable-app.md # Playable app brief
-│   ├── 14-busy-lock.md # Busy lock brief
-│   ├── 15-settle-before-acting.md # Settlement brief
-│   ├── 15b-settle-threshold.md # Settlement threshold brief
-│   ├── 16-keeper-workflow.md # Keeper workflow brief
-│   ├── 17-vps-service.md # VPS service brief
-│   ├── 17b-keeper-threshold.md # Keeper threshold brief
-│   ├── 18-react-app.md # React app brief
-│   ├── 18b-app-review-fixes.md # App review fixes brief
-│   ├── 18c-preview-units-fish.md # Preview units brief
-│   ├── 18d-dev-signer-votes.md # Dev signer brief
-│   ├── 18e-metamask-detection.md # MetaMask detection brief
-│   ├── 18f-already-connected.md # Already-connected brief
-│   ├── 18g-buffer-polyfill.md # Buffer polyfill brief
-│   ├── 19-readme-and-cleanup.md # README and cleanup brief
-│   ├── 20-custom-domain.md # Custom domain brief
-│   ├── 21-indexer.md # Indexer brief
-│   ├── 21b-real-block-shape.md # Real block shape brief
-│   ├── 21c-fastnear-tx-source.md # FastNear transaction source brief
-│   ├── 21d-dedupe.md # Deduplication brief
-│   ├── 21e-dedupe-identity.md # Deduplication identity brief
-│   ├── 21f-active-assemblies.md # Active assemblies brief
-│   ├── 21g-gap-free-paging.md # Gap-free paging brief
-│   ├── 22-redesign.md # Redesign brief
-│   ├── 22b-redesign-review.md # Redesign review brief
-│   ├── 22c-claim-state.md # Claim state brief
-│   ├── 22d-polling-resilience.md # Polling resilience brief
-│   ├── 23-bot-captains.md # Bot captains brief
-│   ├── 24-sea-boat-agora-split.md # Sea, boat, and Agora split brief
-│   ├── 24b-polish.md # Polish brief
-│   ├── 25-sustainable-bots.md # Sustainable bot brief
-│   ├── 25b-simple-safe-bots.md # Simple safe bot brief
-│   ├── 26-new-sea-and-exhibit.md # New sea and exhibit brief
-│   ├── 27-effort-and-ready.md # Effort and ready brief
-│   ├── 28-the-reckoning.md # Reckoning brief
-│   ├── 29-reckoning-ui.md # Reckoning UI brief
-│   ├── 30-server-reckoning.md # Server reckoning brief
-│   ├── 31-faucet-registration.md # Faucet registration brief
-│   ├── 32-bot-stage-race.md # Bot stage race brief
-│   └── 33-final-polish.md # Final polish brief
 ├── contract/ # NEAR smart contract
 │   ├── Cargo.lock # Locked Rust dependencies
 │   ├── Cargo.toml # Rust package metadata
