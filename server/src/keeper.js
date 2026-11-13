@@ -16,6 +16,7 @@ function hashFrom(result) {
 }
 
 export function createKeeper({ config, near, logger = console, now = () => new Date(), setIntervalFn = setInterval, clearIntervalFn = clearInterval }) {
+  const minBehind = config.keeperMinBehind ?? 0;
   const state = {
     enabled: config.keeperEnabled,
     lastRunAt: null,
@@ -35,7 +36,7 @@ export function createKeeper({ config, near, logger = console, now = () => new D
       state.lastError = null;
       for (let count = 0; count < MAX_TICKS_PER_RUN; count += 1) {
         const before = seasonsBehind(sea);
-        if (before === 0) break;
+        if (before <= minBehind) break;
         const result = await near.send(config.tideContract, [actions.functionCall('tick', {}, 300n * TGAS, 0n)]);
         const hash = hashFrom(result);
         sea = await near.view(config.tideContract, 'get_sea', {});

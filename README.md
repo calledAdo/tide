@@ -2,41 +2,32 @@
 
 A NEP-141 memecoin whose supply is a living fish stock: holders fish it into existence, can fish it to extinction, and police each other by Athenian ostracism.
 
-Playable testnet page: https://tide-near.vercel.app/
-Replay: https://tide-near.vercel.app/?demo
+[Play the live app](https://tide-near.vercel.app/). In 30 seconds: connect MetaMask -> get gas and token registration automatically -> claim 100,000 TIDE -> build a boat -> fish -> vote.
+
+No MetaMask? [Watch the replay](https://tide-near.vercel.app/#/replay).
 
 Track: `memecoins` (NEAR Hackathon 2026). License: MIT. Status: testnet; contract keyless after deployment.
 
-## Try it in 2 minutes
+## Try it in 30 seconds
 
-### Play it
+1. Open the [live app](https://tide-near.vercel.app/).
+2. Connect MetaMask. The app creates or resumes a NEAR eth-implicit account, requests 0.5 testnet NEAR and token registration, and asks MetaMask to approve the relayer key.
+3. Claim the one-time 100,000 TIDE faucet, build a boat with at least 1,000 TIDE, fish, and vote during an assembly.
 
-1. Open the [playable testnet page](https://tide-near.vercel.app/?contract=tide-1794517191.memethis-t40-demo.testnet).
-2. Connect a NEAR testnet wallet, then register and claim the one-time 100,000 TIDE faucet.
-3. Build a boat with at least 1,000 TIDE. The 1% build burn applies and fishing starts next season.
-4. Optionally enable one-tap signing, then set effort, preview your catch, and fish once per season.
-5. During an assembly, vote in the hold stage or write up to three shards in the shards stage.
-6. Use TICK to settle elapsed seasons when the contract is behind its clock.
+The [replay](https://tide-near.vercel.app/#/replay) needs no wallet. For local checks, run `./scripts/check.sh`; it prints the two model tables, contract tests, the app simulation check, and `ALL CHECKS PASSED`.
 
-### Replay without a wallet
+### Testing the app locally
 
-1. Run `./scripts/check.sh` -> see the two model tables, contract tests, the web simulation check, and `ALL CHECKS PASSED`.
-2. Open https://tide-near.vercel.app?demo or open `web/index.html?demo` locally to see replay mode. Pick `Lawless sea` ->
-   the 10%-staked open-access run crosses the Allee threshold
-   on day 9 and ends at 78 fish. Pick `$TIDE` -> the same crowd survives at 931,909 fish, with 50 exiles and
-   0 wrongful exiles. Use `web/index.html?contract=<id>` for a different playable contract.
-3. To use a real testnet instance, follow the deployment steps below.
-
-### Testing the playable app locally
-
-Serve `web/` from localhost so the browser can load the live wallet module:
+Run the Vite app from `app/`:
 
 ```bash
-python3 -m http.server 8080 --directory web
+cd app
+npm install
+npm run dev
 ```
 
 The dev-only hook is active only on `localhost` and `127.0.0.1`. A test harness can set a connected
-account and its already-authorized one-tap secret in that browser's local storage:
+account and its already-authorized local signing key in that browser's local storage:
 
 ```js
 localStorage.setItem('tide-dev-account', '<account>');
@@ -45,7 +36,7 @@ localStorage.setItem('tide-chip-key:<account>', '<ed25519-secret-key>');
 
 The secret must correspond to a function-call key on the contract account, and is never stored in this
 repository. Fishing, voting, shards, staking, unstaking, and tick can then be tested without wallet popups.
-Registration, the faucet, and enabling one-tap remain wallet-only actions in dev mode.
+Registration, the faucet, and MetaMask setup remain wallet-only actions in dev mode.
 
 ## Live on testnet
 
@@ -68,9 +59,33 @@ What already happened on chain, from `scripts/demo.sh`:
 
 Seasons keep running after the demo, so by the time you read this the exile has ended and greedy is back at sea (exile is temporary by design). The record stays on chain: the `indicted`, `assembly_closed` and `exiled` events are in the contract's transaction history in the explorer.
 
-To watch it, open `web/index.html?contract=tide-1794517191.memethis-t40-demo.testnet`, or click Live; `web/config.js` already points at it. History is kept in your browser and grows one point per season.
+To watch it, open the [live app](https://tide-near.vercel.app/). It is configured for this contract, and its history is kept in your browser and grows one point per season.
 
 The public RPC rate-limits bursts of view calls; `demo.sh` retries its polling automatically.
+
+## The app
+
+**PLAY** is the live sea and the command deck. The command deck is a state machine: connect and set up the account, claim the faucet, build a boat, then preview effort and fish once per season. During an assembly, the assembly takeover replaces the normal action with the hold vote or shard-writing action. Below the sea are FLEET, ASSEMBLY, and LOG tabs for the known boats, current and previous assembly state, and local transaction history.
+
+**REPLAY** runs the four simulation scenarios without a wallet, with play, pause, restart, speed, chart, fleet, assembly, log, and the dead-sea stamp.
+
+**HOW IT WORKS** presents the five rules, contract parameters, and the NEAR rationale.
+
+The wallet side panel shows the full address, NEAR and TIDE balances, deposit instructions with a QR code, GET TEST NEAR and faucet actions, TIDE and NEAR withdrawal forms, your boat state and controls, the last ten local transactions, and disconnect. Its MetaMask flow and side-panel structure follow the author's other NEAR app, `meme-this-near`.
+
+## MetaMask on NEAR
+
+MetaMask supplies a NEAR **eth-implicit account**, displayed as a 40-character `0x` address. The app switches MetaMask to the NEAR testnet EVM chain, chain `398`, at `https://eth-rpc.testnet.near.org`.
+
+On first connection, the sponsor service onboards the account with 0.5 testnet NEAR for gas and registers it with the TIDE token. The app then asks MetaMask to approve the relayer's limited `rlp_execute` key on the account. That approval enables NEAR Wallet Selector's `ethereum-wallets` module to submit contract actions, but every action still requires a MetaMask confirmation.
+
+Onboarding is limited to once per account per 24 hours, five accounts per client IP per 24 hours, and the configured daily sponsor cap. The service can return an already-funded account without funding it again.
+
+## Server (VPS)
+
+The [`server/`](server/) Node 22 service is deployed at https://tide.204-48-27-245.sslip.io. `GET /health` reports the contract, sponsor balance, seasons behind, keeper state, and onboarding count. `POST /testnet/onboard` funds an eth-implicit account up to 0.5 testnet NEAR and registers it with TIDE.
+
+The keeper polls the sea and sends `tick` when more than 30 seasons are unsettled. The service is deployed with systemd and exposed through Caddy. See [`server/README.md`](server/README.md) for environment variables, limits, and deployment commands.
 
 ## The mechanic
 
@@ -166,7 +181,7 @@ MASTER=you.testnet ./scripts/deploy-testnet.sh
 
 The default funding is `CONTRACT_FUND="3.5 NEAR"` for the contract and `BOAT_FUND="0.5 NEAR"` for each of the six demo accounts, for a total of approximately 6.5 NEAR before gas. Set either variable when running the deploy script if your account needs a different allocation.
 
-The deploy script builds `contract/target/near/tide.wasm`, creates and seeds the contract plus six demo accounts, initializes the contract, deletes all contract access keys, writes `web/config.js`, and writes `scripts/.env.demo`. Open `web/index.html?contract=<id>` for live mode. `DRY_RUN=1 MASTER=example.testnet ./scripts/deploy-testnet.sh` prints the build and transaction commands without requiring an account or network. `DRY_RUN=1 ./scripts/demo.sh` also prints its sequence and uses placeholder account IDs when `.env.demo` is absent.
+The deploy script builds `contract/target/near/tide.wasm`, creates and seeds the contract plus six demo accounts, initializes the contract, deletes all contract access keys, and writes `scripts/.env.demo`. It prints the new contract id; set it in `app/src/config.ts` before deploying the app. `DRY_RUN=1 MASTER=example.testnet ./scripts/deploy-testnet.sh` prints the build and transaction commands without requiring an account or network. `DRY_RUN=1 ./scripts/demo.sh` also prints its sequence and uses placeholder account IDs when `.env.demo` is absent.
 
 ## Contract interface
 
@@ -209,6 +224,10 @@ The deploy script builds `contract/target/near/tide.wasm`, creates and seeds the
 - On-chain randomness is not used anywhere.
 - The live page supports wallet actions; the CLI remains useful for independent contract inspection.
 - The testnet faucet exists only on deployments initialized with a nonzero faucet amount.
+- The sponsor holds testnet NEAR and can run dry; onboarding refuses to operate below 1 NEAR.
+- The keeper is a convenience process run by the author's VPS. The contract does not depend on it; anyone can call `tick`.
+- MetaMask players confirm every action in MetaMask. There is no one-tap signing for eth-implicit accounts.
+- The dev signer is localhost-only.
 - Nothing is audited.
 
 ## Why NEAR
@@ -221,9 +240,11 @@ Gordon (1954); Schaefer (1954); Hardin (1968); Ostrom (1990); Fehr & Gachter (20
 
 ## Built with
 
-near-sdk 5.30.1, near-contract-standards, cargo-near, and near-cli-rs.
+React 19, Vite 8, NEAR Wallet Selector 10 (`ethereum-wallets`), wagmi/viem, near-api-js 7, and server-side Node 22.
 
-Big Shoulders Display, Inter Tight, and JetBrains Mono, bundled locally under `web/fonts/` and licensed under the SIL Open Font License 1.1. The page's visual style is an editorial/brutalist theme shared with the author's other NEAR app. Briefs 01-07 are in `briefs/`.
+The contract uses near-sdk 5.30.1, near-contract-standards, cargo-near, and near-cli-rs.
+
+Big Shoulders Display, Inter Tight, and JetBrains Mono, bundled locally under `app/public/fonts/` and licensed under the SIL Open Font License 1.1. The app's visual style is an editorial/brutalist theme shared with the author's other NEAR app. Briefs 01-19 are in `briefs/`.
 
 Design, simulation and specs by the author with Claude Code; implementation tasks delegated to OpenAI Codex (gpt-5.6-luna) from written briefs in `briefs/`, reviewed and tested by the author. All code was written during the hackathon (from 2026-11-12).
 
@@ -234,6 +255,34 @@ Design, simulation and specs by the author with Claude Code; implementation task
 ├── .gitignore # Ignore rules
 ├── LICENSE # MIT license
 ├── README.md # Project overview and usage
+├── app/ # Playable React app
+│   ├── index.html # Vite entrypoint
+│   ├── package-lock.json # Locked app dependencies
+│   ├── package.json # App dependencies and scripts
+│   ├── public/fonts/README.md # Font inventory and license
+│   ├── public/fonts/*.woff2 # Bundled Big Shoulders Display, Inter Tight, JetBrains Mono
+│   ├── scripts/check-sim.cjs # Replay simulation check
+│   ├── src/App.tsx # App shell and routes
+│   ├── src/components/* # React app components
+│   ├── src/config.ts # Contract and service configuration
+│   ├── src/lib/format.test.ts # Formatting tests
+│   ├── src/lib/format.ts # Formatting helpers
+│   ├── src/main.tsx # React entrypoint
+│   ├── src/near/tide.ts # Contract client
+│   ├── src/near/types.ts # Contract types
+│   ├── src/near/wallet.ts # MetaMask wallet
+│   ├── src/sim/engine.ts # Replay adapter
+│   ├── src/sim/sim.js # Replay simulation engine
+│   ├── src/styles.css # App styles
+│   ├── src/styles/console.css # Console styles
+│   ├── src/styles/how.css # How-it-works styles
+│   ├── src/styles/layout.css # Layout styles
+│   ├── src/styles/panel.css # Wallet panel styles
+│   ├── src/styles/replay.css # Replay styles
+│   ├── src/styles/sea.css # Sea styles
+│   ├── src/styles/tokens.css # Design tokens
+│   ├── tsconfig.json # TypeScript configuration
+│   └── vite.config.ts # Vite configuration
 ├── briefs/ # Design and implementation briefs
 │   ├── 01-fix-test-and-build.md # Initial build and test brief
 │   ├── 01b-abi-schema.md # ABI schema brief
@@ -243,7 +292,25 @@ Design, simulation and specs by the author with Claude Code; implementation task
 │   ├── 05-readable-web.md # Readable web brief
 │   ├── 05b-refactor-regressions.md # Regression refactor brief
 │   ├── 06-restyle-editorial.md # Editorial restyle brief
-│   └── 07-repo-metadata.md # Repository metadata brief
+│   ├── 07-repo-metadata.md # Repository metadata brief
+│   ├── 08-funding-env.md # Funding environment brief
+│   ├── 09-demo-relative-seasons.md # Demo timing brief
+│   ├── 10-demo-timing-and-live-chart.md # Demo chart brief
+│   ├── 11-live-assembly-and-readme.md # Live assembly brief
+│   ├── 12-stale-exiles-and-url.md # Stale exile brief
+│   ├── 12b-history-is-history.md # History brief
+│   ├── 13-playable-app.md # Playable app brief
+│   ├── 14-busy-lock.md # Busy lock brief
+│   ├── 15-settle-before-acting.md # Settlement brief
+│   ├── 15b-settle-threshold.md # Settlement threshold brief
+│   ├── 16-keeper-workflow.md # Keeper workflow brief
+│   ├── 17-vps-service.md # VPS service brief
+│   ├── 17b-keeper-threshold.md # Keeper threshold brief
+│   ├── 18-react-app.md # React app brief
+│   ├── 18b-app-review-fixes.md # App review fixes brief
+│   ├── 18c-preview-units-fish.md # Preview units brief
+│   ├── 18d-dev-signer-votes.md # Dev signer brief
+│   └── 19-readme-and-cleanup.md # README and cleanup brief
 ├── contract/ # NEAR smart contract
 │   ├── Cargo.lock # Locked Rust dependencies
 │   ├── Cargo.toml # Rust package metadata
@@ -255,20 +322,26 @@ Design, simulation and specs by the author with Claude Code; implementation task
 │   ├── check.sh # Run project checks
 │   ├── demo.sh # Run the demo sequence
 │   └── deploy-testnet.sh # Deploy to NEAR testnet
-├── sim/ # Supply and fishery simulations
-│   ├── tide_runs.csv # Simulation run data
-│   ├── tide_sim.py # Governance simulation
-│   ├── tide_stock.png # Stock chart raster
-│   ├── tide_stock.svg # Stock chart vector
-│   └── tide_supply.py # Supply simulation
-└── web/ # Browser demo and live page
-    ├── app.js # Page interaction logic
-    ├── check-sim.cjs # Browser simulation check
-    ├── config.js # Deployment configuration
-    ├── fonts/ # Bundled local fonts
-    │   ├── README.md # Font inventory and license
-    │   └── *.woff2 # Big Shoulders Display, Inter Tight, JetBrains Mono (OFL 1.1), see web/fonts/README.md
-    ├── index.html # Page markup
-    ├── sim.js # Browser simulation
-    └── styles.css # Page styles
+├── server/ # VPS onboarding and keeper service
+│   ├── README.md # Service and deployment guide
+│   ├── deploy/Caddyfile.tide # Caddy site configuration
+│   ├── deploy/env.example # Service environment template
+│   ├── deploy/tide-api.service # systemd service
+│   ├── package-lock.json # Locked server dependencies
+│   ├── package.json # Server dependencies and scripts
+│   ├── src/config.js # Service configuration
+│   ├── src/index.js # HTTP service
+│   ├── src/keeper.js # Keeper loop
+│   ├── src/near.js # NEAR client
+│   ├── src/onboard.js # Account onboarding
+│   ├── src/ratelimit.js # Onboarding limits
+│   ├── test/config.test.js # Configuration tests
+│   ├── test/keeper.test.js # Keeper tests
+│   └── test/onboard.test.js # Onboarding tests
+└── sim/ # Supply and fishery simulations
+    ├── tide_runs.csv # Simulation run data
+    ├── tide_sim.py # Governance simulation
+    ├── tide_stock.png # Stock chart raster
+    ├── tide_stock.svg # Stock chart vector
+    └── tide_supply.py # Supply simulation
 ```

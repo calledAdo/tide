@@ -1,0 +1,249 @@
+.sea-wrap {
+  min-width: 0;
+}
+
+.sea-heading,
+.console-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 16px 17px 12px;
+}
+
+.sea-heading h1,
+.how-page h1,
+.replay-head h1 {
+  margin: 2px 0 0;
+  font: 900 clamp(38px, 5vw, 70px)/.86 Big Shoulders Display;
+}
+
+.sea-state,
+.dev-badge,
+.online-dot {
+  padding: 4px 6px;
+  background: var(--marker);
+  font: 800 9px JetBrains Mono;
+}
+
+.dev-badge {
+  color: var(--ink);
+  background: var(--amber-bg);
+}
+
+.sea-visual {
+  position: relative;
+  margin: 0 16px;
+  overflow: hidden;
+  border: 2px solid var(--ink);
+  background: var(--water);
+}
+
+.sea-visual svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 290px;
+}
+
+.waterline {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.water-band {
+  fill: var(--water-deep);
+  opacity: 0.76;
+}
+
+.fish-glyph {
+  fill: #effcff;
+  opacity: 0.85;
+  animation: fish-drift 8s ease-in-out infinite alternate;
+}
+
+.fish-glyph path {
+  fill: #effcff;
+}
+
+.boat-glyph path {
+  fill: var(--ink);
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.boat-glyph text {
+  fill: var(--ink);
+  font: 800 8px JetBrains Mono;
+}
+
+.boat-glyph.you path {
+  fill: var(--signal);
+}
+
+.boat-glyph.you text {
+  fill: var(--signal);
+}
+
+.boat-glyph .flag {
+  fill: var(--amber);
+  font-size: 13px;
+}
+
+.boat-glyph .exile-tag {
+  fill: var(--danger);
+  font-size: 7px;
+}
+
+.catch-line {
+  stroke: var(--marker);
+  stroke-width: 2;
+  stroke-dasharray: 5 5;
+  animation: line-pulse 2.2s linear infinite;
+}
+
+.depth-gauge {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  bottom: 9px;
+  display: flex;
+  width: 66px;
+  justify-content: space-between;
+  padding: 2px 0 2px 8px;
+  border-left: 2px solid var(--ink);
+  font: 800 8px JetBrains Mono;
+  flex-direction: column;
+}
+
+.depth-gauge i {
+  position: absolute;
+  left: -7px;
+  width: 12px;
+  height: 4px;
+  border: 1px solid var(--ink);
+  background: var(--signal);
+}
+
+.gauge-top {
+  color: var(--fair);
+}
+
+.gauge-bottom {
+  color: var(--danger);
+}
+
+.death-stamp {
+  position: absolute;
+  inset: 30% 20%;
+  display: grid;
+  place-items: center;
+  border: 5px solid var(--danger);
+  color: var(--danger);
+  background: #f4f1eacc;
+  font: 900 27px/.86 Big Shoulders Display;
+  text-align: center;
+  transform: rotate(-8deg);
+}
+
+.sea-readout {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 1.3fr;
+  margin: 0 16px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.sea-readout > div {
+  padding: 12px 10px;
+  border-right: 1px solid var(--rule);
+}
+
+.sea-readout > div:last-child {
+  border-right: 0;
+}
+
+.sea-readout span,
+.sea-readout small {
+  display: block;
+  color: var(--muted);
+  font: 800 9px JetBrains Mono;
+}
+
+.sea-readout strong {
+  display: block;
+  margin: 3px 0;
+  font: 800 24px JetBrains Mono;
+}
+
+.quota-track {
+  height: 8px;
+  margin: 5px 0;
+  border: 1px solid var(--ink);
+  background: #fff;
+}
+
+.quota-track i {
+  display: block;
+  height: 100%;
+  background: var(--marker);
+}
+
+.sparkline {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px 12px;
+  color: var(--muted);
+  font: 800 9px JetBrains Mono;
+}
+
+.sparkline svg {
+  width: 100%;
+  height: 44px;
+}
+
+.sparkline path {
+  fill: none;
+  stroke: var(--signal);
+  stroke-width: 2;
+}
+
+.sparkline small {
+  color: var(--muted);
+  font: 800 8px JetBrains Mono;
+}
+
+@keyframes fish-drift {
+  from {
+    transform: translateX(-4px);
+  }
+
+  to {
+    transform: translateX(10px);
+  }
+}
+
+@keyframes line-pulse {
+  to {
+    stroke-dashoffset: -20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fish-glyph,
+  .catch-line,
+  .progress-pulse {
+    animation: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .sea-visual svg {
+    min-height: 240px;
+  }
+
+  .sea-readout strong {
+    font-size: 18px;
+  }
+}

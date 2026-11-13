@@ -1,6 +1,7 @@
 'use strict';
 
-const TideSim = require('./sim.js');
+require('../src/sim/sim.js');
+const TideSim = globalThis.TideSim;
 
 const expected = {
   lawless: { final: 78, deadAt: 9, exiles: 0, wrong: 0, edge: null, apr: 20.6 },

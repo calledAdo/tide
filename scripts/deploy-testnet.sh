@@ -171,16 +171,8 @@ else
 fi
 
 if [[ "$DRY_RUN" == "1" ]]; then
-  printf 'DRY_RUN: would write web/config.js and scripts/.env.demo\n'
+  printf 'DRY_RUN: would write scripts/.env.demo\n'
 else
-  {
-    printf 'window.TIDE_CONFIG = { network: "testnet", contract: "%s", boats: [' "$CONTRACT"
-    for boat in "${BOATS[@]}"; do
-      printf '"%s",' "$boat"
-    done
-    printf '] };\n'
-  } > web/config.js
-
   {
     printf 'CONTRACT=%q\n' "$CONTRACT"
     for i in "${!BOAT_NAMES[@]}"; do
@@ -189,6 +181,7 @@ else
   } > scripts/.env.demo
 fi
 
+printf 'Contract id: %s\n' "$CONTRACT"
+printf '%s\n' 'Set CONTRACT in app/src/config.ts before deploying the app.'
 printf 'Explorer: https://testnet.nearblocks.io/address/%s\n' "$CONTRACT"
-printf '%s\n' 'Open web/index.html for demo mode. For live mode use web/index.html?contract=<id>.'
 printf '%s\n' 'Run ./scripts/demo.sh to drive the six-account ritual after deployment.'

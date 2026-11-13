@@ -1,0 +1,231 @@
+.wallet-panel-backdrop {
+  position: fixed;
+  z-index: 10;
+  inset: 0;
+  display: flex;
+  justify-content: flex-end;
+  background: #14141466;
+}
+
+.wallet-panel {
+  width: min(500px, 100vw);
+  height: 100dvh;
+  overflow: auto;
+  padding: 20px 24px;
+  border-left: 3px solid var(--ink);
+  background: var(--paper);
+  box-shadow: -8px 0 0 #1414141f;
+}
+
+.wallet-head {
+  display: flex;
+  justify-content: space-between;
+  padding-bottom: 14px;
+  border-bottom: 3px solid var(--ink);
+}
+
+.wallet-head h2 {
+  margin: 0;
+  font: 900 34px/.9 Big Shoulders Display;
+}
+
+.icon-button {
+  width: 38px;
+  height: 38px;
+  border: 2px solid var(--ink);
+  color: #fff;
+  background: var(--signal);
+  font-size: 25px;
+}
+
+.wallet-section {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.wallet-section h3 {
+  margin: 0 0 10px;
+  font: 900 17px Big Shoulders Display;
+}
+
+.section-title {
+  display: flex;
+  justify-content: space-between;
+}
+
+.section-title a {
+  text-decoration: underline;
+  font: 800 9px JetBrains Mono;
+}
+
+.address-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.address-line code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font: 700 10px JetBrains Mono;
+}
+
+.address-line button {
+  flex: none;
+  min-height: 28px;
+  padding: 3px 7px;
+  font: 800 9px JetBrains Mono;
+}
+
+.wallet-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.wallet-note code {
+  font: 700 10px JetBrains Mono;
+}
+
+.balance-list {
+  margin: 0;
+}
+
+.balance-list div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid #14141422;
+}
+
+.balance-list dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.balance-list dd {
+  margin: 0;
+  text-align: right;
+  font: 800 11px JetBrains Mono;
+}
+
+.deposit-layout {
+  display: grid;
+  grid-template-columns: 1fr 112px;
+  gap: 12px;
+}
+
+.wallet-qr {
+  width: 112px;
+  height: 112px;
+  border: 5px solid #fff;
+}
+
+.wallet-action {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.wallet-form {
+  display: grid;
+  gap: 8px;
+}
+
+.wallet-form label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font: 800 9px JetBrains Mono;
+}
+
+.wallet-form input {
+  min-height: 38px;
+  padding: 7px;
+  border: 1px solid var(--ink);
+  background: var(--panel);
+  font: 12px JetBrains Mono;
+}
+
+.wallet-tx {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 12px;
+}
+
+.wallet-tx a {
+  text-decoration: underline;
+  font: 800 9px JetBrains Mono;
+}
+
+.wallet-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 15px;
+}
+
+.wallet-footer span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.toast-stack {
+  position: fixed;
+  z-index: 20;
+  right: 20px;
+  bottom: 20px;
+  display: grid;
+  width: min(390px, calc(100vw - 40px));
+  gap: 7px;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px;
+  border: 2px solid var(--ink);
+  background: var(--panel);
+  box-shadow: 4px 4px 0 var(--ink);
+  font-size: 12px;
+}
+
+.toast span {
+  flex: 1;
+}
+
+.toast a {
+  text-decoration: underline;
+  font: 800 9px JetBrains Mono;
+}
+
+.toast button {
+  min-height: 20px;
+  border: 0;
+  font-size: 18px;
+}
+
+.toast.pending {
+  border-left: 6px solid var(--signal);
+}
+
+.toast.success {
+  border-left: 6px solid var(--fair);
+}
+
+.toast.error {
+  border-left: 6px solid var(--danger);
+  color: var(--danger);
+}
+
+@media (max-width: 760px) {
+  .wallet-panel {
+    width: 100vw;
+    padding: 18px 16px;
+  }
+}

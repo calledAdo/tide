@@ -9,6 +9,7 @@ const DEFAULTS = {
   ONBOARD_MIN_NEAR: '0.1',
   ONBOARD_DAILY_CAP: '60',
   KEEPER_INTERVAL_MS: '30000',
+  KEEPER_MIN_BEHIND: '30',
   KEEPER_ENABLED: 'true',
 };
 
@@ -80,6 +81,7 @@ export function loadConfig(env = process.env) {
     onboardMinNearYocto: onboardMinNear.yocto,
     onboardDailyCap: positiveInteger(value(env, 'ONBOARD_DAILY_CAP'), 'ONBOARD_DAILY_CAP'),
     keeperIntervalMs: positiveInteger(value(env, 'KEEPER_INTERVAL_MS'), 'KEEPER_INTERVAL_MS'),
+    keeperMinBehind: nonNegativeInteger(value(env, 'KEEPER_MIN_BEHIND'), 'KEEPER_MIN_BEHIND'),
     keeperEnabled: booleanValue(value(env, 'KEEPER_ENABLED'), 'KEEPER_ENABLED'),
     sponsorMinimumYocto: nearToYocto('1'),
   };

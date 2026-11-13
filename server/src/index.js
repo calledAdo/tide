@@ -71,6 +71,7 @@ export function createHandler({ config, near, limiter, keeper, now = () => Date.
         sponsor: config.sponsorAccountId,
         sponsorBalanceNear,
         seasonsBehind,
+        keeperMinBehind: config.keeperMinBehind,
         keeper: keeper.state,
         onboardedToday: await limiter.countToday(now()),
       }, cors);

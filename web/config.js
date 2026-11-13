@@ -1,1 +1,0 @@
-window.TIDE_CONFIG = { network: "testnet", contract: "tide-1794517191.memethis-t40-demo.testnet", boats: ["ana-1794517191.memethis-t40-demo.testnet","ben-1794517191.memethis-t40-demo.testnet","cy-1794517191.memethis-t40-demo.testnet","dee-1794517191.memethis-t40-demo.testnet","eve-1794517191.memethis-t40-demo.testnet","greedy-1794517191.memethis-t40-demo.testnet",] };

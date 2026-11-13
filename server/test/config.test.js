@@ -13,6 +13,7 @@ test('loads defaults and parses onboarding values', () => {
   const config = loadConfig(required);
   assert.equal(config.port, 3101);
   assert.equal(config.keeperEnabled, true);
+  assert.equal(config.keeperMinBehind, 30);
   assert.equal(config.onboardNearYocto, 500_000_000_000_000_000_000_000n);
   assert.deepEqual(config.frontendOrigins, ['https://tide-near.vercel.app', 'http://localhost:5173']);
 });

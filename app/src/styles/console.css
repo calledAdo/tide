@@ -1,0 +1,216 @@
+.console {
+  min-height: 520px;
+}
+
+.console-head {
+  border-bottom: 1px solid var(--rule);
+}
+
+.console-head .online-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  background: var(--fair);
+  font-size: 0;
+}
+
+.console-state {
+  padding: 20px 17px;
+}
+
+.console-state h2 {
+  margin: 6px 0 14px;
+  font: 900 49px/.84 Big Shoulders Display;
+}
+
+.console-copy {
+  max-width: 310px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.console-label,
+.effort-label {
+  display: grid;
+  gap: 5px;
+  margin: 15px 0;
+  color: var(--muted);
+  font: 800 10px JetBrains Mono;
+}
+
+.console-label input {
+  min-height: 40px;
+  padding: 8px;
+  border: 2px solid var(--ink);
+  background: #fff;
+  font: 800 18px JetBrains Mono;
+}
+
+.preset-row {
+  display: flex;
+  gap: 5px;
+}
+
+.preset-row button {
+  flex: 1;
+  font: 800 10px JetBrains Mono;
+}
+
+.preset-row button[aria-pressed='true'] {
+  background: var(--marker);
+}
+
+.burn-note {
+  color: var(--muted);
+  font: 10px JetBrains Mono;
+}
+
+.progress-pulse {
+  height: 6px;
+  background: var(--marker);
+  animation: progress 1.2s infinite;
+}
+
+.effort-label b {
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.effort-label input {
+  width: 100%;
+  accent-color: var(--signal);
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 14px 0;
+  border-block: 1px solid var(--rule);
+}
+
+.preview-grid span {
+  padding: 9px 3px;
+  border-right: 1px solid var(--rule);
+  color: var(--muted);
+  font: 800 8px JetBrains Mono;
+}
+
+.preview-grid span:last-child {
+  border: 0;
+}
+
+.preview-grid b {
+  display: block;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.amber-note,
+.next-season {
+  padding: 9px;
+  border-left: 4px solid var(--amber);
+  background: var(--amber-bg);
+  font: 800 10px JetBrains Mono;
+}
+
+.console-actions {
+  display: grid;
+  gap: 7px;
+}
+
+.link-button {
+  padding: 3px 0;
+  border: 0;
+  text-align: left;
+  text-decoration: underline;
+  font: 800 10px JetBrains Mono;
+}
+
+.boat-details {
+  margin: 0 17px;
+  padding: 12px 0;
+  border-top: 1px solid var(--rule);
+  font-size: 12px;
+}
+
+.boat-details summary {
+  cursor: pointer;
+  font: 800 10px JetBrains Mono;
+}
+
+.boat-details p {
+  color: var(--muted);
+}
+
+.assembly-takeover {
+  margin: 0 17px;
+  padding: 12px;
+  border: 2px solid var(--ink);
+  background: var(--marker);
+}
+
+.takeover-title {
+  display: flex;
+  justify-content: space-between;
+  font: 800 10px JetBrains Mono;
+}
+
+.assembly-takeover p {
+  margin: 12px 0;
+  font: 900 24px/.9 Big Shoulders Display;
+}
+
+.assembly-takeover small {
+  font: 800 9px JetBrains Mono;
+}
+
+.vote-buttons {
+  display: flex;
+  gap: 7px;
+}
+
+.vote-buttons button {
+  flex: 1;
+}
+
+.shard-list {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0;
+}
+
+.shard-list button {
+  display: flex;
+  justify-content: space-between;
+  padding: 7px;
+  text-align: left;
+}
+
+.shard-list button.selected {
+  border: 2px solid var(--amber);
+  background: var(--amber-bg);
+}
+
+.shard-list span {
+  font: 800 9px JetBrains Mono;
+}
+
+@keyframes progress {
+  0% {
+    width: 12%;
+  }
+
+  50% {
+    width: 92%;
+  }
+
+  100% {
+    width: 12%;
+  }
+}
+
+@media (max-width: 760px) {
+  .console {
+    min-height: 0;
+  }
+}

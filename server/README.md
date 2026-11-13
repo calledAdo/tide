@@ -3,13 +3,13 @@
 This Node 22 service provides two small operational functions for the TIDE testnet:
 
 - `POST /testnet/onboard` funds an eth-implicit NEAR account up to the configured NEAR amount and registers it with the TIDE contract.
-- The keeper periodically views `get_sea()` and sends `tick({})` when seasons are behind, up to five ticks per run.
+- The keeper periodically views `get_sea()` and sends `tick({})` when seasons are more than `KEEPER_MIN_BEHIND` behind, up to five ticks per run. The default threshold is 30.
 
 The service listens on `127.0.0.1:3101` by default and is intended to sit behind Caddy. It uses only `near-api-js` and Node built-ins. The sponsor private key is used only in memory and is never logged.
 
 ## Endpoints
 
-`GET /health` returns the testnet, TIDE contract, sponsor, sponsor balance, seasons behind, keeper state, and today’s onboarding count.
+`GET /health` returns the testnet, TIDE contract, sponsor, sponsor balance, seasons behind, `keeperMinBehind`, keeper state, and today’s onboarding count.
 
 `POST /testnet/onboard` accepts JSON such as `{"accountId":"0x..."}`. The account must match `0x` plus 40 lowercase hexadecimal characters. A successful response contains the funded account, target NEAR amount, registration status, and transaction hashes. Requests are limited to one funding per account per 24 hours, five accounts per client IP per 24 hours, and the configured daily total. The limiter is persisted in `DATA_DIR`.
 
@@ -38,6 +38,7 @@ FRONTEND_ORIGINS
 | `ONBOARD_MIN_NEAR` | `0.1` |
 | `ONBOARD_DAILY_CAP` | `60` |
 | `KEEPER_INTERVAL_MS` | `30000` |
+| `KEEPER_MIN_BEHIND` | `30` |
 | `KEEPER_ENABLED` | `true` |
 
 ## Local checks
