@@ -9,3 +9,7 @@ memecoin-combos.md
 scripts/.env.demo
 .DS_Store
 .vercel/
+app/node_modules/
+app/dist/
+server/node_modules/
+server/.env

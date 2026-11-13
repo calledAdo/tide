@@ -1,0 +1,4 @@
+tide.204-48-27-245.sslip.io {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:3101
+}
