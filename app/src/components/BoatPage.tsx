@@ -8,6 +8,7 @@ import {
   type BoatHistory,
 } from '../near/history';
 import type { TideWallet, WalletSnapshot } from '../near/wallet';
+import { callWithStorageRegistration, type StorageClient } from '../near/registration';
 import { tideAmountExceedsBalance, tideUnits } from '../config';
 import { compactNumber, formatTide } from '../lib/format';
 import { RunAction, seconds, shortName, useSeasonClock } from './shared';
@@ -16,6 +17,7 @@ import { YourDay } from './YourDay';
 type Props = {
   wallet: WalletSnapshot;
   walletApi: TideWallet;
+  tideClient: StorageClient;
   snapshot: TideSnapshot;
   onConnect: () => void;
   run: RunAction;
@@ -26,12 +28,21 @@ function hull(stake: number): string {
   return stake >= 1_000_000e18 ? 'FACTORY SHIP' : stake >= 50_000e18 ? 'TRAWLER' : 'DINGHY';
 }
 
-export function BoatPage({ wallet, walletApi, snapshot, onConnect, run, onRefresh }: Props) {
+export function BoatPage({
+  wallet,
+  walletApi,
+  tideClient,
+  snapshot,
+  onConnect,
+  run,
+  onRefresh,
+}: Props) {
   const account = wallet.account;
   const boat = account ? snapshot.boats[account] : null;
   const [amount, setAmount] = useState('10000');
   const [history, setHistory] = useState<BoatHistory | null>(null);
   const [failed, setFailed] = useState(false);
+  const [actionProgress, setActionProgress] = useState('');
   const clock = useSeasonClock(snapshot.sea);
   useEffect(() => {
     if (!account) return undefined;
@@ -46,7 +57,16 @@ export function BoatPage({ wallet, walletApi, snapshot, onConnect, run, onRefres
   const call = (label: string, method: string, args: Record<string, unknown>) => run(
     label,
     async () => {
-      const result = await walletApi.call(method, args);
+      if (!account) throw new Error('Connect MetaMask first.');
+      const result = method === 'stake'
+        ? await callWithStorageRegistration(
+          walletApi,
+          tideClient,
+          account,
+          { method, args, progress: 'Staking…' },
+          setActionProgress,
+        )
+        : await walletApi.call(method, args);
       onRefresh();
       return result;
     },
@@ -150,6 +170,7 @@ export function BoatPage({ wallet, walletApi, snapshot, onConnect, run, onRefres
             )}
           >DOCK</button>
         </div>
+        {actionProgress && <p className="wallet-note" role="status">{actionProgress}</p>}
         <p className="hull-warning">upgrading pauses fishing until tomorrow</p>
         {blocked && <p className="blocked-reason">BLOCKED · {blocked}</p>}
       </section>

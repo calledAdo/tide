@@ -40,6 +40,7 @@ enum StorageKey {
     Token,
     Metadata,
     Boats,
+    BoatAccounts,
     ExileUntil,
     Exiled,
     HoldVoted,
@@ -65,6 +66,25 @@ pub struct Boat {
     pub counted: bool,
 }
 
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Phase {
+    Fishing,
+    Wrecked,
+    Recovering,
+}
+
+#[near(serializers = [borsh, json])]
+#[derive(Clone)]
+pub struct ReckoningHistory {
+    pub generation: u32,
+    pub died_season: u64,
+    pub burned_total: U128,
+    pub boats_wrecked: u32,
+    pub reseeded_season: Option<u64>,
+    pub funded: bool,
+}
+
 #[near(contract_state)]
 #[derive(PanicOnDefault)]
 pub struct Tide {
@@ -84,11 +104,25 @@ pub struct Tide {
     caught_micro: u128,
     dead: bool,
     died_season: Option<u64>,
+    generation: u32,
+    carrying_capacity: u128,
+    phase: Phase,
+    reseed_fund: u128,
+    wreck_season: Option<u64>,
+    recovery_until_season: Option<u64>,
+    recovery_burned: u128,
+    reseed_contributors: Vec<(AccountId, u128)>,
+    reckoning_history: Vec<ReckoningHistory>,
+    permanent_loss: bool,
+    wreck_pending: bool,
+    wreck_cursor: u32,
 
     // ---- the fleet ----
     boats: LookupMap<AccountId, Boat>,
+    boat_accounts: Vector<AccountId>,
     /// All staked TIDE right now.
     staked_total: u128,
+    staked_boat_count: u32,
     /// Staked TIDE at the opening of `season`; catches and fair shares are computed against it.
     fleet_snapshot: u128,
     /// Boats with at least MIN_STAKE that are not exiled.
@@ -154,7 +188,14 @@ pub struct SeaView {
     pub burned_fuel: U128,
     pub burned_build: U128,
     pub burned_shards: U128,
+    pub recovery_burned: U128,
     pub total_supply: U128,
+    pub generation: u32,
+    pub phase: Phase,
+    pub reseed_fund: U128,
+    pub reseed_cost: U128,
+    pub reseed_deadline_season: Option<u64>,
+    pub recovery_until_season: Option<u64>,
 }
 
 #[near(serializers = [json])]
@@ -202,8 +243,22 @@ impl Tide {
             caught_micro: 0,
             dead: false,
             died_season: None,
+            generation: 0,
+            carrying_capacity: K_FISH,
+            phase: Phase::Fishing,
+            reseed_fund: 0,
+            wreck_season: None,
+            recovery_until_season: None,
+            recovery_burned: 0,
+            reseed_contributors: vec![],
+            reckoning_history: vec![],
+            permanent_loss: false,
+            wreck_pending: false,
+            wreck_cursor: 0,
             boats: LookupMap::new(StorageKey::Boats),
+            boat_accounts: Vector::new(StorageKey::BoatAccounts),
             staked_total: 0,
+            staked_boat_count: 0,
             fleet_snapshot: 0,
             voter_count: 0,
             exile_until: LookupMap::new(StorageKey::ExileUntil),
@@ -230,7 +285,12 @@ impl Tide {
                 this.token.internal_register_account(&account);
             }
             this.token.internal_deposit(&account, amount.0);
-            FtMint { owner_id: &account, amount, memo: Some("genesis") }.emit();
+            FtMint {
+                owner_id: &account,
+                amount,
+                memo: Some("genesis"),
+            }
+            .emit();
         }
         this
     }
@@ -251,11 +311,17 @@ impl Tide {
             self.close_season();
             steps += 1;
         }
+        self.advance_phase();
+        self.maybe_reseed(target);
     }
 
     fn close_season(&mut self) {
         let closing = self.season;
-        let next = next_stock_micro(self.stock_micro, self.caught_micro);
+        let next = next_stock_micro_with_capacity(
+            self.stock_micro,
+            self.caught_micro,
+            self.carrying_capacity,
+        );
         emit(
             "season_closed",
             json!({"season": closing, "opening_stock": U128(self.stock_micro / MICRO),
@@ -267,18 +333,221 @@ impl Tide {
         self.season = closing + 1;
         self.stock_micro = next;
         self.caught_micro = 0;
-        if !self.dead && self.stock_micro < A_FISH * MICRO {
-            self.dead = true;
-            self.died_season = Some(self.season);
-            emit("sea_died", json!({"season": self.season, "stock": U128(self.stock_micro / MICRO)}));
+        if self.phase != Phase::Wrecked && self.stock_micro < A_FISH * MICRO {
+            self.wreck_sea();
         }
         self.release_exiles();
         self.fleet_snapshot = self.staked_total;
+        self.advance_phase();
     }
 
     /// Anyone can advance the clock (useful after long quiet periods).
     pub fn tick(&mut self) {
         self.sync();
+    }
+
+    fn advance_phase(&mut self) {
+        if self.phase == Phase::Recovering
+            && self
+                .recovery_until_season
+                .map_or(false, |until| self.season >= until)
+        {
+            self.phase = Phase::Fishing;
+            self.recovery_until_season = None;
+            emit(
+                "recovery_complete",
+                json!({"season": self.season, "generation": self.generation}),
+            );
+        }
+    }
+
+    fn clear_exile_state(&mut self) {
+        let names: Vec<AccountId> = self.exiled.iter().cloned().collect();
+        for name in names {
+            self.exile_until.remove(&name);
+        }
+        self.exiled.clear();
+        self.hold_yes = 0;
+        self.hold_no = 0;
+        self.named.clear();
+    }
+
+    fn wreck_sea(&mut self) {
+        self.phase = Phase::Wrecked;
+        self.dead = true;
+        self.died_season = Some(self.season);
+        self.wreck_season = Some(self.season);
+        self.wreck_pending = true;
+        self.wreck_cursor = 0;
+        let boats_wrecked = self.staked_boat_count;
+        let burned_total = self.staked_total * WRECK_BURN_BPS / BPS;
+        self.reckoning_history.push(ReckoningHistory {
+            generation: self.generation,
+            died_season: self.season,
+            burned_total: U128(burned_total),
+            boats_wrecked,
+            reseeded_season: None,
+            funded: false,
+        });
+        self.voter_count = 0;
+        self.staked_total = 0;
+        self.staked_boat_count = 0;
+        self.fleet_snapshot = 0;
+        self.clear_exile_state();
+        emit(
+            "sea_died",
+            json!({"season": self.season, "stock": U128(self.stock_micro / MICRO)}),
+        );
+        emit(
+            "reckoning",
+            json!({"generation": self.generation, "season": self.season,
+                   "stock": U128(self.stock_micro / MICRO), "boats_wrecked": boats_wrecked,
+                   "burned_total": U128(burned_total)}),
+        );
+        self.settle_wreck_batch();
+    }
+
+    fn settle_wreck_batch(&mut self) {
+        if !self.wreck_pending {
+            return;
+        }
+        let mut processed = 0;
+        while processed < WRECK_BATCH && self.wreck_cursor < self.boat_accounts.len() {
+            let account = self.boat_accounts.get(self.wreck_cursor).unwrap().clone();
+            self.wreck_cursor += 1;
+            processed += 1;
+            let mut boat = self.boat(&account);
+            if boat.stake.0 == 0 {
+                continue;
+            }
+            let stake = boat.stake.0;
+            let burned = stake * WRECK_BURN_BPS / BPS;
+            let returned = stake - burned;
+            let contract = env::current_account_id();
+            self.token.internal_withdraw(&contract, burned);
+            FtBurn {
+                owner_id: &contract,
+                amount: U128(burned),
+                memo: Some("boat wreck"),
+            }
+            .emit();
+            self.token.internal_transfer(
+                &contract,
+                &account,
+                returned,
+                Some("wreck return".to_string()),
+            );
+            boat.stake = U128(0);
+            boat.counted = false;
+            self.boats.insert(account.clone(), boat);
+            emit(
+                "boat_wrecked",
+                json!({"account": account, "burned": U128(burned), "returned": U128(returned)}),
+            );
+        }
+        if self.wreck_cursor >= self.boat_accounts.len() {
+            self.wreck_pending = false;
+        }
+    }
+
+    fn maybe_reseed(&mut self, target: u64) {
+        if self.phase != Phase::Wrecked || self.permanent_loss || self.wreck_pending {
+            return;
+        }
+        let deadline = self
+            .wreck_season
+            .map(|s| s + RESEED_DEADLINE)
+            .unwrap_or(u64::MAX);
+        let funded = self.reseed_fund >= RESEED_COST;
+        if !funded && target < deadline && self.season < deadline {
+            return;
+        }
+        if target > self.season {
+            self.season = target;
+        }
+        let next_generation = self.generation + 1;
+        let capacity = self.carrying_capacity * K_DECAY_BPS / BPS;
+        self.generation = next_generation;
+        self.carrying_capacity = capacity;
+        if capacity <= A_FISH {
+            self.reseed_fund = 0;
+            self.permanent_loss = true;
+            emit(
+                "sea_lost_forever",
+                json!({"generation": self.generation, "carrying_capacity": U128(capacity)}),
+            );
+            self.reseed_contributors.clear();
+            return;
+        }
+        let stock = if funded {
+            capacity * RESEED_HEALTHY_BPS / BPS
+        } else {
+            RESEED_FALLBACK.max(capacity * RESEED_FALLBACK_BPS / BPS)
+        };
+        let contributors: Vec<(AccountId, U128)> = self
+            .reseed_contributors
+            .iter()
+            .map(|(account, amount)| (account.clone(), U128(*amount)))
+            .collect();
+        self.stock_micro = stock * MICRO;
+        self.caught_micro = 0;
+        self.phase = Phase::Recovering;
+        self.dead = false;
+        self.recovery_until_season = Some(self.season + RECOVERY_SEASONS);
+        self.reseed_fund = 0;
+        self.wreck_season = None;
+        self.reseed_contributors.clear();
+        if let Some(history) = self.reckoning_history.last_mut() {
+            history.reseeded_season = Some(self.season);
+            history.funded = funded;
+        }
+        emit(
+            "reseeded",
+            json!({"generation": self.generation, "carrying_capacity": U128(capacity),
+                   "stock": U128(stock), "funded": funded, "contributors": contributors}),
+        );
+    }
+
+    /// Process at most twenty dissolved boats. Calling this after completion is harmless.
+    pub fn settle_wreck(&mut self) {
+        self.sync();
+        if self.phase != Phase::Wrecked {
+            return;
+        }
+        self.settle_wreck_batch();
+        self.maybe_reseed(self.current_season_by_clock());
+    }
+
+    /// Burn TIDE permanently to fund the community's next sea.
+    pub fn contribute_reseed(&mut self, amount: U128) {
+        self.sync();
+        require!(
+            self.phase == Phase::Wrecked && !self.permanent_loss,
+            "RESEED NOT AVAILABLE"
+        );
+        require!(amount.0 > 0, "amount must be positive");
+        let who = env::predecessor_account_id();
+        self.token.internal_withdraw(&who, amount.0);
+        FtBurn {
+            owner_id: &who,
+            amount,
+            memo: Some("reseed contribution"),
+        }
+        .emit();
+        self.reseed_fund += amount.0;
+        match self
+            .reseed_contributors
+            .iter_mut()
+            .find(|(account, _)| account == &who)
+        {
+            Some((_, total)) => *total += amount.0,
+            None => self.reseed_contributors.push((who.clone(), amount.0)),
+        }
+        emit(
+            "reseed_contribution",
+            json!({"account": who, "amount": amount, "fund": U128(self.reseed_fund)}),
+        );
+        self.maybe_reseed(self.current_season_by_clock());
     }
 
     // =====================================================================================
@@ -290,7 +559,9 @@ impl Tide {
     }
 
     fn is_exiled(&self, account: &AccountId) -> bool {
-        self.exile_until.get(account).map_or(false, |until| *until > self.season)
+        self.exile_until
+            .get(account)
+            .map_or(false, |until| *until > self.season)
     }
 
     fn assert_not_exiled(&self, account: &AccountId) {
@@ -314,29 +585,48 @@ impl Tide {
     /// Stake TIDE as a boat. 1% of the deposit is burned (the boat is built). Takes effect next season.
     pub fn stake(&mut self, amount: U128) {
         self.sync();
-        require!(!self.dead, "THE SEA IS DEAD");
+        require!(
+            self.phase != Phase::Wrecked && !self.permanent_loss,
+            "THE SEA IS DEAD"
+        );
         let who = env::predecessor_account_id();
         self.assert_not_exiled(&who);
         require!(amount.0 > 0, "amount must be positive");
         let burn = amount.0 * BUILD_BURN_BPS / BPS;
         let net = amount.0 - burn;
         self.token.internal_withdraw(&who, burn);
-        FtBurn { owner_id: &who, amount: U128(burn), memo: Some("boat built") }.emit();
+        FtBurn {
+            owner_id: &who,
+            amount: U128(burn),
+            memo: Some("boat built"),
+        }
+        .emit();
         self.burned_build += burn;
         let me = env::current_account_id();
-        self.token.internal_transfer(&who, &me, net, Some("stake".to_string()));
+        self.token
+            .internal_transfer(&who, &me, net, Some("stake".to_string()));
         let mut boat = self.boat(&who);
+        if boat.stake.0 == 0 {
+            if self.boats.get(&who).is_none() {
+                self.boat_accounts.push(who.clone());
+            }
+            self.staked_boat_count += 1;
+        }
         boat.stake = U128(boat.stake.0 + net);
         boat.stake_season = self.season;
         self.staked_total += net;
         self.recount(&who, &mut boat);
-        emit("boat_staked", json!({"account": who, "stake": boat.stake, "burned": U128(burn)}));
+        emit(
+            "boat_staked",
+            json!({"account": who, "stake": boat.stake, "burned": U128(burn)}),
+        );
         self.boats.insert(who, boat);
     }
 
     /// Unstake. Blocked while exiled, and while indicted until the assembly of that cycle has closed.
     pub fn unstake(&mut self, amount: U128) {
         self.sync();
+        require!(self.phase != Phase::Wrecked, "THE SEA IS WRECKED");
         let who = env::predecessor_account_id();
         self.assert_not_exiled(&who);
         let mut boat = self.boat(&who);
@@ -352,10 +642,17 @@ impl Tide {
         }
         boat.stake = U128(boat.stake.0 - amount.0);
         self.staked_total -= amount.0;
+        if boat.stake.0 == 0 {
+            self.staked_boat_count -= 1;
+        }
         let me = env::current_account_id();
-        self.token.internal_transfer(&me, &who, amount.0, Some("unstake".to_string()));
+        self.token
+            .internal_transfer(&me, &who, amount.0, Some("unstake".to_string()));
         self.recount(&who, &mut boat);
-        emit("boat_unstaked", json!({"account": who, "stake": boat.stake}));
+        emit(
+            "boat_unstaked",
+            json!({"account": who, "stake": boat.stake}),
+        );
         self.boats.insert(who, boat);
     }
 
@@ -364,27 +661,53 @@ impl Tide {
     /// is allowed but recorded as an indictment.
     pub fn fish(&mut self, effort_bps: u16) -> U128 {
         self.sync();
-        require!(!self.dead, "THE SEA IS DEAD");
+        require!(
+            self.phase != Phase::Wrecked && !self.permanent_loss,
+            "THE SEA IS DEAD"
+        );
         let who = env::predecessor_account_id();
         self.assert_not_exiled(&who);
         let effort = effort_bps as u128;
         require!(effort > 0 && effort <= BPS, "effort_bps must be 1..=10000");
         let mut boat = self.boat(&who);
         require!(boat.stake.0 > 0, "no boat: stake TIDE first");
-        require!(boat.stake_season < self.season, "your boat was built or topped up this season: fish next season");
-        require!(boat.last_fished != Some(self.season), "already fished this season");
+        require!(
+            boat.stake_season < self.season,
+            "your boat was built or topped up this season: fish next season"
+        );
+        require!(
+            boat.last_fished != Some(self.season),
+            "already fished this season"
+        );
 
         let fleet = self.fleet_snapshot;
         let stake = boat.stake.0.min(fleet);
         let catch = catch_units(self.stock_micro, stake, fleet, effort);
         let fuel = fuel_units(stake, effort);
-        let share = fair_share_units(stake, fleet);
+        let share = fair_share_for_capacity_units(stake, fleet, self.carrying_capacity);
+        let recovery_burned = if self.phase == Phase::Recovering {
+            catch * RECOVERY_TAX_BPS / BPS
+        } else {
+            0
+        };
+        let minted = catch - recovery_burned;
 
-        self.token.internal_deposit(&who, catch);
-        FtMint { owner_id: &who, amount: U128(catch), memo: Some("catch") }.emit();
+        self.token.internal_deposit(&who, minted);
+        FtMint {
+            owner_id: &who,
+            amount: U128(minted),
+            memo: Some("catch"),
+        }
+        .emit();
         self.token.internal_withdraw(&who, fuel);
-        FtBurn { owner_id: &who, amount: U128(fuel), memo: Some("fuel") }.emit();
-        self.minted_catch += catch;
+        FtBurn {
+            owner_id: &who,
+            amount: U128(fuel),
+            memo: Some("fuel"),
+        }
+        .emit();
+        self.minted_catch += minted;
+        self.recovery_burned += recovery_burned;
         self.burned_fuel += fuel;
         self.caught_micro += catch / UNITS_PER_MICRO;
         boat.last_fished = Some(self.season);
@@ -392,7 +715,9 @@ impl Tide {
         emit(
             "catch",
             json!({"account": who, "season": self.season, "effort_bps": effort_bps,
-                   "catch": U128(catch), "fuel": U128(fuel), "fair_share": U128(share)}),
+                   "catch": U128(minted), "fish_taken": U128(catch),
+                   "recovery_burned": U128(recovery_burned), "fuel": U128(fuel),
+                   "fair_share": U128(share)}),
         );
         if catch > share {
             let over = catch - share;
@@ -410,7 +735,7 @@ impl Tide {
             );
         }
         self.boats.insert(who, boat);
-        U128(catch)
+        U128(minted)
     }
 
     // =====================================================================================
@@ -426,48 +751,83 @@ impl Tide {
         if season % ASSEMBLY_EVERY != ASSEMBLY_EVERY - 1 {
             return None;
         }
-        let into = env::block_timestamp().saturating_sub(self.genesis_ns + season * self.season_len_ns);
-        Some(if into < self.season_len_ns / 2 { "hold" } else { "shards" })
+        let into =
+            env::block_timestamp().saturating_sub(self.genesis_ns + season * self.season_len_ns);
+        Some(if into < self.season_len_ns / 2 {
+            "hold"
+        } else {
+            "shards"
+        })
     }
 
     fn assert_voter(&self, who: &AccountId) -> Boat {
         self.assert_not_exiled(who);
         let boat = self.boat(who);
-        require!(boat.stake.0 >= MIN_STAKE, "only boats with at least 1,000 TIDE staked can vote");
-        require!(boat.stake_season < self.season, "boats built this season cannot vote yet");
+        require!(
+            boat.stake.0 >= MIN_STAKE,
+            "only boats with at least 1,000 TIDE staked can vote"
+        );
+        require!(
+            boat.stake_season < self.season,
+            "boats built this season cannot vote yet"
+        );
         boat
     }
 
     /// Stage 1: "Shall we hold an ostracism this cycle?"
     pub fn vote_hold(&mut self, yes: bool) {
         self.sync();
-        require!(self.assembly_stage() == Some("hold"), "not the first half of an assembly season");
+        require!(
+            self.assembly_stage() == Some("hold"),
+            "not the first half of an assembly season"
+        );
         let who = env::predecessor_account_id();
         self.assert_voter(&who);
         let cycle = self.season / ASSEMBLY_EVERY;
-        require!(self.hold_voted.insert((cycle, who.clone())), "already voted");
+        require!(
+            self.hold_voted.insert((cycle, who.clone())),
+            "already voted"
+        );
         if yes {
             self.hold_yes += 1;
         } else {
             self.hold_no += 1;
         }
-        emit("hold_vote", json!({"account": who, "cycle": cycle, "yes": yes}));
+        emit(
+            "hold_vote",
+            json!({"account": who, "cycle": cycle, "yes": yes}),
+        );
     }
 
     /// Stage 2: write up to 3 NEAR account names on your shard. Costs 1 TIDE per name (burned).
     pub fn write_shard(&mut self, names: Vec<AccountId>) {
         self.sync();
-        require!(self.assembly_stage() == Some("shards"), "not the second half of an assembly season");
-        require!(self.hold_yes * 2 > self.voter_count, "the assembly voted not to hold an ostracism");
-        require!(!names.is_empty() && names.len() <= NAMES_PER_SHARD, "write 1 to 3 names");
+        require!(
+            self.assembly_stage() == Some("shards"),
+            "not the second half of an assembly season"
+        );
+        require!(
+            self.hold_yes * 2 > self.voter_count,
+            "the assembly voted not to hold an ostracism"
+        );
+        require!(
+            !names.is_empty() && names.len() <= NAMES_PER_SHARD,
+            "write 1 to 3 names"
+        );
         let who = env::predecessor_account_id();
         self.assert_voter(&who);
         let cycle = self.season / ASSEMBLY_EVERY;
-        require!(self.shard_voted.insert((cycle, who.clone())), "already wrote a shard");
+        require!(
+            self.shard_voted.insert((cycle, who.clone())),
+            "already wrote a shard"
+        );
         let mut seen: Vec<&AccountId> = vec![];
         for name in &names {
             require!(!seen.contains(&name), "duplicate name");
-            require!(self.boats.contains_key(name), "only boats can be ostracised");
+            require!(
+                self.boats.contains_key(name),
+                "only boats can be ostracised"
+            );
             seen.push(name);
             let key = (cycle, name.clone());
             let n = self.shards.get(&key).copied().unwrap_or(0);
@@ -478,9 +838,17 @@ impl Tide {
         }
         let burn = SHARD_BURN * names.len() as u128;
         self.token.internal_withdraw(&who, burn);
-        FtBurn { owner_id: &who, amount: U128(burn), memo: Some("shard") }.emit();
+        FtBurn {
+            owner_id: &who,
+            amount: U128(burn),
+            memo: Some("shard"),
+        }
+        .emit();
         self.burned_shards += burn;
-        emit("shard", json!({"account": who, "cycle": cycle, "names": names}));
+        emit(
+            "shard",
+            json!({"account": who, "cycle": cycle, "names": names}),
+        );
     }
 
     fn close_assembly(&mut self, cycle: u64) {
@@ -491,7 +859,11 @@ impl Tide {
             let needed = (QUORUM_BPS * eligible as u128 + BPS - 1) / BPS; // ceil(40% of eligible)
             let names: Vec<AccountId> = self.named.iter().cloned().collect();
             for name in names {
-                let n = self.shards.get(&(cycle, name.clone())).copied().unwrap_or(0) as u128;
+                let n = self
+                    .shards
+                    .get(&(cycle, name.clone()))
+                    .copied()
+                    .unwrap_or(0) as u128;
                 if n >= needed.max(1) {
                     exiled_now.push(name);
                 }
@@ -505,7 +877,10 @@ impl Tide {
                 self.recount(name, &mut boat); // exile_until > season already, so the boat stops counting
                 self.boats.insert(name.clone(), boat);
             }
-            emit("exiled", json!({"account": name, "cycle": cycle, "until_season": until}));
+            emit(
+                "exiled",
+                json!({"account": name, "cycle": cycle, "until_season": until}),
+            );
         }
         let result = AssemblyResult {
             cycle,
@@ -533,7 +908,10 @@ impl Tide {
                     self.recount(&name, &mut boat);
                     self.boats.insert(name.clone(), boat);
                 }
-                emit("returned_from_exile", json!({"account": name, "season": self.season}));
+                emit(
+                    "returned_from_exile",
+                    json!({"account": name, "season": self.season}),
+                );
             } else {
                 i += 1;
             }
@@ -553,7 +931,12 @@ impl Tide {
             env::panic_str("register first with storage_deposit");
         }
         self.token.internal_deposit(&who, self.faucet_amount);
-        FtMint { owner_id: &who, amount: U128(self.faucet_amount), memo: Some("faucet") }.emit();
+        FtMint {
+            owner_id: &who,
+            amount: U128(self.faucet_amount),
+            memo: Some("faucet"),
+        }
+        .emit();
     }
 
     // =====================================================================================
@@ -567,10 +950,14 @@ impl Tide {
         if target == self.season {
             return (self.season, self.stock_micro, self.fleet_snapshot);
         }
-        let mut stock = next_stock_micro(self.stock_micro, self.caught_micro);
+        let mut stock = next_stock_micro_with_capacity(
+            self.stock_micro,
+            self.caught_micro,
+            self.carrying_capacity,
+        );
         let mut season = self.season + 1;
         while season < target && season < self.season + 1_000 {
-            stock = next_stock_micro(stock, 0);
+            stock = next_stock_micro_with_capacity(stock, 0, self.carrying_capacity);
             season += 1;
         }
         (target, stock, self.staked_total)
@@ -584,6 +971,9 @@ impl Tide {
             "min_stake": U128(MIN_STAKE), "build_burn": "1%", "assembly_every_seasons": ASSEMBLY_EVERY,
             "exile_seasons": EXILE_SEASONS, "names_per_shard": NAMES_PER_SHARD, "quorum": "40% of eligible boats",
             "stage1": "more than half of eligible boats", "shard_burn": U128(SHARD_BURN),
+            "wreck_burn": "50% of stake", "capacity_decay": "80% per generation",
+            "reseed_cost": U128(RESEED_COST), "reseed_deadline": RESEED_DEADLINE,
+            "recovery_seasons": RECOVERY_SEASONS, "recovery_tax": "50% of catch",
             "season_len_sec": self.season_len_ns / 1_000_000_000, "faucet_amount": U128(self.faucet_amount),
             "admin": null
         })
@@ -600,11 +990,11 @@ impl Tide {
             seasons_behind: by_clock - self.season,
             stock_fish: U128(stock / MICRO),
             caught_this_season: U128(if synced { self.caught_micro / MICRO } else { 0 }),
-            carrying_capacity: U128(K_FISH),
+            carrying_capacity: U128(self.carrying_capacity),
             allee_threshold: U128(A_FISH),
-            msy_stock: U128(689_000),
-            quota_per_season: U128(QUOTA_FISH),
-            dead: self.dead || stock < A_FISH * MICRO,
+            msy_stock: U128(msy_stock_fish(self.carrying_capacity)),
+            quota_per_season: U128(quota_fish_for_capacity(self.carrying_capacity)),
+            dead: self.dead || self.permanent_loss || stock < A_FISH * MICRO,
             died_season: self.died_season,
             staked_total: U128(self.staked_total),
             fleet_snapshot: U128(fleet),
@@ -616,7 +1006,14 @@ impl Tide {
             burned_fuel: U128(self.burned_fuel),
             burned_build: U128(self.burned_build),
             burned_shards: U128(self.burned_shards),
+            recovery_burned: U128(self.recovery_burned),
             total_supply: U128(self.token.total_supply),
+            generation: self.generation,
+            phase: self.phase,
+            reseed_fund: U128(self.reseed_fund),
+            reseed_cost: U128(RESEED_COST),
+            reseed_deadline_season: self.wreck_season.map(|s| s + RESEED_DEADLINE),
+            recovery_until_season: self.recovery_until_season,
         }
     }
 
@@ -624,16 +1021,25 @@ impl Tide {
         let boat = self.boats.get(&account_id)?.clone();
         let (season, stock, fleet) = self.projected();
         let stake = boat.stake.0.min(fleet);
-        let exiled_until = self.exile_until.get(&account_id).copied().filter(|u| *u > season);
+        let exiled_until = self
+            .exile_until
+            .get(&account_id)
+            .copied()
+            .filter(|u| *u > season);
         Some(BoatView {
-            can_fish_now: !self.dead
+            can_fish_now: self.phase != Phase::Wrecked
+                && !self.permanent_loss
                 && stock >= A_FISH * MICRO
                 && exiled_until.is_none()
                 && boat.stake.0 > 0
                 && boat.stake_season < season
                 && boat.last_fished != Some(season),
             exiled_until,
-            fair_share: U128(fair_share_units(stake, fleet)),
+            fair_share: U128(fair_share_for_capacity_units(
+                stake,
+                fleet,
+                self.carrying_capacity,
+            )),
             full_effort_catch: U128(catch_units(stock, stake, fleet, BPS)),
             full_effort_fuel: U128(fuel_units(stake, BPS)),
             boat,
@@ -645,7 +1051,12 @@ impl Tide {
         let shards: Vec<(AccountId, u32)> = self
             .named
             .iter()
-            .map(|n| (n.clone(), self.shards.get(&(cycle, n.clone())).copied().unwrap_or(0)))
+            .map(|n| {
+                (
+                    n.clone(),
+                    self.shards.get(&(cycle, n.clone())).copied().unwrap_or(0),
+                )
+            })
             .collect();
         json!({
             "cycle": cycle, "stage": self.assembly_stage(), "eligible": self.voter_count,
@@ -664,6 +1075,29 @@ impl Tide {
             .iter()
             .map(|n| (n.clone(), self.exile_until.get(n).copied().unwrap_or(0)))
             .collect()
+    }
+
+    pub fn get_reckoning(&self) -> serde_json::Value {
+        let contributors: Vec<(AccountId, U128)> = self
+            .reseed_contributors
+            .iter()
+            .map(|(account, amount)| (account.clone(), U128(*amount)))
+            .collect();
+        let history = serde_json::to_value(&self.reckoning_history).unwrap();
+        json!({
+            "generation": self.generation,
+            "phase": match self.phase {
+                Phase::Fishing => "Fishing",
+                Phase::Wrecked => "Wrecked",
+                Phase::Recovering => "Recovering",
+            },
+            "wreck_season": self.wreck_season,
+            "reseed_fund": U128(self.reseed_fund),
+            "reseed_cost": U128(RESEED_COST),
+            "contributors": contributors,
+            "deadline_season": self.wreck_season.map(|s| s + RESEED_DEADLINE),
+            "history": history,
+        })
     }
 }
 
@@ -705,8 +1139,15 @@ impl FungibleTokenCore for Tide {
 #[near]
 impl FungibleTokenResolver for Tide {
     #[private]
-    fn ft_resolve_transfer(&mut self, sender_id: AccountId, receiver_id: AccountId, amount: U128) -> U128 {
-        let (used, burned) = self.token.internal_ft_resolve_transfer(&sender_id, receiver_id, amount);
+    fn ft_resolve_transfer(
+        &mut self,
+        sender_id: AccountId,
+        receiver_id: AccountId,
+        amount: U128,
+    ) -> U128 {
+        let (used, burned) =
+            self.token
+                .internal_ft_resolve_transfer(&sender_id, receiver_id, amount);
         if burned > 0 {
             log!("Account @{} burned {}", sender_id, burned);
         }
@@ -717,7 +1158,11 @@ impl FungibleTokenResolver for Tide {
 #[near]
 impl StorageManagement for Tide {
     #[payable]
-    fn storage_deposit(&mut self, account_id: Option<AccountId>, registration_only: Option<bool>) -> StorageBalance {
+    fn storage_deposit(
+        &mut self,
+        account_id: Option<AccountId>,
+        registration_only: Option<bool>,
+    ) -> StorageBalance {
         self.token.storage_deposit(account_id, registration_only)
     }
 
@@ -733,7 +1178,12 @@ impl StorageManagement for Tide {
         self.assert_not_exiled(&who);
         if let Some((_, balance)) = self.token.internal_storage_unregister(force) {
             if balance > 0 {
-                FtBurn { owner_id: &who, amount: U128(balance), memo: Some("unregister") }.emit();
+                FtBurn {
+                    owner_id: &who,
+                    amount: U128(balance),
+                    memo: Some("unregister"),
+                }
+                .emit();
             }
             true
         } else {

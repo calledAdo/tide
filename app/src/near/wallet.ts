@@ -413,6 +413,12 @@ export function metaMaskErrorMessage(error: unknown): string {
 type EthTransaction = { receiverId: string; actions: WalletAction[] };
 type GasAction = WalletAction & { functionCall?: { gas: bigint } };
 
+export type WalletCall = {
+  method: string;
+  args?: JsonObject;
+  deposit?: bigint;
+};
+
 export function prepareEthImplicitTransactions(
   transactions: readonly EthTransaction[],
 ): EthTransaction[] {
@@ -668,7 +674,7 @@ export class TideWallet {
     this.setState({ account: undefined, error: '', progress: '' });
   }
 
-  private async devCall(method: string, args: JsonObject): Promise<TransactionResult> {
+  private async devCallBatch(calls: readonly WalletCall[]): Promise<TransactionResult> {
     const accountId = devAccount();
     const secret = accountId ? localStorage.getItem(`tide-chip-key:${accountId}`) : null;
     if (!accountId || !secret) {
@@ -681,9 +687,54 @@ export class TideWallet {
     );
     const result = await account.signAndSendTransaction({
       receiverId: CONTRACT,
-      actions: [actions.functionCall(method, args, GAS, 0n)],
+      actions: calls.map((item) => actions.functionCall(
+        item.method,
+        item.args ?? {},
+        GAS,
+        item.deposit ?? 0n,
+      )),
     });
     return resultOf(result as unknown as ResultShape);
+  }
+
+  async callBatch(
+    calls: readonly WalletCall[],
+    onTransaction?: (index: number, total: number) => void,
+  ): Promise<TransactionResult> {
+    if (!calls.length) throw new Error('No wallet actions to send.');
+    if (this.snapshot.dev) {
+      try {
+        return await this.devCallBatch(calls);
+      } catch (error) {
+        throw new Error(panicMessage(error));
+      }
+    }
+    if (!this.wallet || !this.snapshot.account) throw new Error('Connect MetaMask first.');
+    this.assertMetaMaskAccount(this.snapshot.account);
+    const actionList = calls.map((item) => actions.functionCall(
+      item.method,
+      item.args ?? {},
+      GAS,
+      item.deposit ?? 0n,
+    ) as unknown as WalletAction);
+    const transactions = isEthImplicitAccount(this.snapshot.account)
+      ? prepareEthImplicitTransactions([{ receiverId: CONTRACT, actions: actionList }])
+      : [{ receiverId: CONTRACT, actions: actionList }];
+    let result: TransactionResult = { hash: '', url: '' };
+    try {
+      for (let index = 0; index < transactions.length; index += 1) {
+        const transaction = transactions[index]!;
+        onTransaction?.(index, transactions.length);
+        const signed = await withMetaMaskTimeout(this.wallet.signAndSendTransaction({
+          receiverId: transaction.receiverId,
+          actions: transaction.actions,
+        }));
+        result = resultOf(signed);
+      }
+      return result;
+    } catch (error) {
+      throw new Error(panicMessage(error));
+    }
   }
 
   async call(
@@ -691,32 +742,7 @@ export class TideWallet {
     args: JsonObject = {},
     deposit = 0n,
   ): Promise<TransactionResult> {
-    if (this.snapshot.dev) {
-      if (deposit !== 0n) {
-        throw new Error('This wallet-only action is not available with the dev signer.');
-      }
-      try {
-        return await this.devCall(method, args);
-      } catch (error) {
-        throw new Error(panicMessage(error));
-      }
-    }
-    if (!this.wallet || !this.snapshot.account) throw new Error('Connect MetaMask first.');
-    this.assertMetaMaskAccount(this.snapshot.account);
-    const action = actions.functionCall(method, args, GAS, deposit) as unknown as WalletAction;
-    try {
-      const transactions = prepareEthImplicitTransactions([{
-        receiverId: CONTRACT,
-        actions: [action],
-      }]);
-      const result = await withMetaMaskTimeout(this.wallet.signAndSendTransaction({
-        receiverId: CONTRACT,
-        actions: transactions[0]!.actions,
-      }));
-      return resultOf(result);
-    } catch (error) {
-      throw new Error(panicMessage(error));
-    }
+    return this.callBatch([{ method, args, deposit }]);
   }
 
   async transferNear(recipient: string, amount: bigint): Promise<TransactionResult> {

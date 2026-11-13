@@ -30,6 +30,18 @@ pub const FUEL_PPM: u128 = 2_000;
 /// Quota = 80% of maximum sustainable yield (MSY = 73,155 fish/season at stock 689,000).
 pub const QUOTA_FISH: u128 = 58_524;
 
+/// Reckoning.
+pub const WRECK_BURN_BPS: u128 = 5_000;
+pub const K_DECAY_BPS: u128 = 8_000;
+pub const RESEED_COST: u128 = 1_000_000 * ONE;
+pub const RESEED_DEADLINE: u64 = 60;
+pub const RESEED_HEALTHY_BPS: u128 = 7_000;
+pub const RESEED_FALLBACK: u128 = 2 * A_FISH;
+pub const RESEED_FALLBACK_BPS: u128 = 3_000;
+pub const RECOVERY_SEASONS: u64 = 30;
+pub const RECOVERY_TAX_BPS: u128 = 5_000;
+pub const WRECK_BATCH: usize = 20;
+
 /// Boats.
 pub const MIN_STAKE: u128 = 1_000 * ONE;
 pub const BUILD_BURN_BPS: u128 = 100; // 1% of every stake deposit is burned
@@ -54,7 +66,15 @@ pub fn mul_div(a: u128, b: u128, c: u128) -> u128 {
 /// Natural growth per season, in micro-fish. Logistic growth with a strong Allee effect:
 /// g(S) = r * S * (1 - S/K) * (S - A) / K. Negative below A: the sea then shrinks even if nobody fishes.
 pub fn growth_micro(s: u128) -> i128 {
-    let k = (K_FISH * MICRO) as i128;
+    growth_micro_with_capacity(s, K_FISH)
+}
+
+/// Natural growth using the current carrying capacity. The Allee threshold stays fixed.
+pub fn growth_micro_with_capacity(s: u128, capacity_fish: u128) -> i128 {
+    if capacity_fish == 0 {
+        return 0;
+    }
+    let k = (capacity_fish * MICRO) as i128;
     let a = (A_FISH * MICRO) as i128;
     let s = s as i128;
     let t = s * (k - s) / k; // <= K/4 ~ 2.5e11
@@ -63,8 +83,12 @@ pub fn growth_micro(s: u128) -> i128 {
 
 /// Stock after one season: remove the catch, then let the sea regrow.
 pub fn next_stock_micro(stock: u128, caught: u128) -> u128 {
+    next_stock_micro_with_capacity(stock, caught, K_FISH)
+}
+
+pub fn next_stock_micro_with_capacity(stock: u128, caught: u128, capacity_fish: u128) -> u128 {
     let after = stock.saturating_sub(caught);
-    let g = growth_micro(after);
+    let g = growth_micro_with_capacity(after, capacity_fish);
     if g >= 0 {
         after + g as u128
     } else {
@@ -96,6 +120,41 @@ pub fn fair_share_units(stake: u128, fleet: u128) -> u128 {
         return 0;
     }
     mul_div(QUOTA_FISH * ONE, stake, fleet)
+}
+
+/// Integer MSY search. Growth is unimodal between the fixed Allee threshold and K.
+pub fn msy_stock_fish(capacity_fish: u128) -> u128 {
+    if capacity_fish <= A_FISH {
+        return capacity_fish;
+    }
+    let mut lo = A_FISH;
+    let mut hi = capacity_fish;
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        let here = growth_micro_with_capacity(mid * MICRO, capacity_fish);
+        let next = growth_micro_with_capacity((mid + 1) * MICRO, capacity_fish);
+        if next > here {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    lo
+}
+
+pub fn quota_fish_for_capacity(capacity_fish: u128) -> u128 {
+    let msy = msy_stock_fish(capacity_fish);
+    let growth = growth_micro_with_capacity(msy * MICRO, capacity_fish).max(0) as u128;
+    (growth * QUOTA_OF_MSY_BPS + (BPS * MICRO) / 2) / (BPS * MICRO)
+}
+
+pub const QUOTA_OF_MSY_BPS: u128 = 8_000;
+
+pub fn fair_share_for_capacity_units(stake: u128, fleet: u128, capacity_fish: u128) -> u128 {
+    if fleet == 0 {
+        return 0;
+    }
+    mul_div(quota_fish_for_capacity(capacity_fish) * ONE, stake, fleet)
 }
 
 #[cfg(test)]

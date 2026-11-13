@@ -38,6 +38,14 @@ export function Toasts({ toasts, onDismiss }: ToastsProps) {
       {toasts.slice(-3).map((toast) => (
         <div className={`toast ${toast.kind}`} key={toast.id}>
           <span>{toast.text}</span>
+          {toast.retry && (
+            <button onClick={() => {
+              onDismiss(toast.id);
+              toast.retry?.();
+            }}>
+              REGISTER &amp; RETRY
+            </button>
+          )}
           {toast.result?.hash && (
             <a href={toast.result.url} target="_blank" rel="noreferrer">VIEW ↗</a>
           )}

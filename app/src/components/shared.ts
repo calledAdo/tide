@@ -4,7 +4,8 @@ import { formatAccountAddress, type TransactionResult } from '../near/wallet';
 import type { AssemblyView, BoatView, SeaView, TransactionRecord } from '../near/types';
 import { asString } from '../near/types';
 
-export const faucetClaimedKey = (account: string): string => `tide-faucet-claimed:${account}`;
+export const faucetClaimedKey = (account: string): string =>
+  `tide-faucet-claimed:${CONTRACT}:${account}`;
 
 export function isFaucetClaimedLocally(account: string): boolean {
   return localStorage.getItem(faucetClaimedKey(account)) !== null;
@@ -20,6 +21,7 @@ export type Toast = {
   kind: 'pending' | 'success' | 'error' | 'info';
   text: string;
   result?: TransactionResult;
+  retry?: () => void;
 };
 
 export type RunAction = (

@@ -20,12 +20,21 @@ fn at(who: &str, season: u64, frac: f64) {
         .build());
 }
 
-const BOATS: [&str; 5] = ["ana.testnet", "ben.testnet", "cy.testnet", "dee.testnet", "greedy.testnet"];
+const BOATS: [&str; 5] = [
+    "ana.testnet",
+    "ben.testnet",
+    "cy.testnet",
+    "dee.testnet",
+    "greedy.testnet",
+];
 
 /// Five holders with 10M TIDE each; each stakes 5M in season 0 (4.95M after the 1% build burn).
 fn setup() -> Tide {
     at("deployer.testnet", 0, 0.0);
-    let genesis = BOATS.iter().map(|b| (acc(b), U128(10_000_000 * ONE))).collect();
+    let genesis = BOATS
+        .iter()
+        .map(|b| (acc(b), U128(10_000_000 * ONE)))
+        .collect();
     let mut t = Tide::new(genesis, SEASON_SEC, U128(0));
     for b in BOATS {
         at(b, 0, 0.1);
@@ -46,7 +55,10 @@ fn genesis_and_build_burn() {
     assert_eq!(bal(&t, "ana.testnet"), 5_000_000 * ONE);
     let boat = t.get_boat(acc("ana.testnet")).unwrap();
     assert_eq!(boat.boat.stake.0, 4_950_000 * ONE);
-    assert!(!boat.can_fish_now, "a boat built this season cannot fish yet");
+    assert!(
+        !boat.can_fish_now,
+        "a boat built this season cannot fish yet"
+    );
     assert_eq!(t.get_params()["admin"], serde_json::Value::Null);
 }
 
@@ -75,7 +87,10 @@ fn fair_fishing_mints_catch_and_burns_fuel() {
     assert!(c <= share);
     let fuel = fuel_units(4_950_000 * ONE, effort as u128);
     assert_eq!(t.ft_total_supply().0, supply_before + c - fuel);
-    assert!(t.get_indictments(0).is_empty(), "fair fishing is not indicted");
+    assert!(
+        t.get_indictments(0).is_empty(),
+        "fair fishing is not indicted"
+    );
 }
 
 #[test]
@@ -99,7 +114,10 @@ fn overfishing_is_indicted_and_blocks_unstaking() {
     assert!(list[0].1 .0 > 23_000 * ONE);
     at("greedy.testnet", 2, 0.1);
     let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| t.unstake(U128(ONE))));
-    assert!(r.is_err(), "indicted boats cannot unstake before the assembly closes");
+    assert!(
+        r.is_err(),
+        "indicted boats cannot unstake before the assembly closes"
+    );
 }
 
 /// The full ritual: greedy overfishes in season 1; season 2 is the assembly; greedy is exiled from season 3.
@@ -128,8 +146,14 @@ fn assembly_exiles_the_overfisher_and_keeps_its_tokens() {
     let res = t.get_assembly()["last_result"].clone();
     assert_eq!(res["held"], true);
     assert_eq!(res["exiled"][0], "greedy.testnet");
-    assert_eq!(t.get_exiles(), vec![(acc("greedy.testnet"), 3 + EXILE_SEASONS)]);
-    assert!(bal(&t, "greedy.testnet") > before, "exile never confiscates: the catch is still there");
+    assert_eq!(
+        t.get_exiles(),
+        vec![(acc("greedy.testnet"), 3 + EXILE_SEASONS)]
+    );
+    assert!(
+        bal(&t, "greedy.testnet") > before,
+        "exile never confiscates: the catch is still there"
+    );
     assert_eq!(t.get_sea().voter_count, 4, "exiled boats do not vote");
 }
 
@@ -241,7 +265,8 @@ fn fair_fleet_keeps_the_sea_alive() {
         for b in BOATS {
             at(b, season, 0.1);
             let v = t.get_boat(acc(b)).unwrap();
-            let effort = ((v.fair_share.0 * 10_000) / v.full_effort_catch.0.max(1)).min(10_000) as u16;
+            let effort =
+                ((v.fair_share.0 * 10_000) / v.full_effort_catch.0.max(1)).min(10_000) as u16;
             if effort > 0 {
                 t.fish(effort);
             }
@@ -251,7 +276,11 @@ fn fair_fleet_keeps_the_sea_alive() {
     t.tick();
     let sea = t.get_sea();
     assert!(!sea.dead);
-    assert!(sea.stock_fish.0 > 689_000, "stock settles above the MSY level: {}", sea.stock_fish.0);
+    assert!(
+        sea.stock_fish.0 > 689_000,
+        "stock settles above the MSY level: {}",
+        sea.stock_fish.0
+    );
 }
 
 #[test]
@@ -262,5 +291,164 @@ fn lazy_catch_up_after_a_quiet_period() {
     let sea = t.get_sea();
     assert_eq!(sea.season, 30);
     assert!(sea.synced);
-    assert!(sea.stock_fish.0 > 700_000, "the unfished sea regrows toward K");
+    assert!(
+        sea.stock_fish.0 > 700_000,
+        "the unfished sea regrows toward K"
+    );
+}
+
+fn many_boats() -> (Tide, Vec<String>) {
+    at("deployer.testnet", 0, 0.0);
+    let names: Vec<String> = (0..25).map(|i| format!("boat{}.testnet", i)).collect();
+    let genesis = names
+        .iter()
+        .map(|name| (acc(name), U128(10_000_000 * ONE)))
+        .collect();
+    let mut t = Tide::new(genesis, SEASON_SEC, U128(0));
+    for name in &names {
+        at(name, 0, 0.1);
+        t.stake(U128(5_000_000 * ONE));
+    }
+    (t, names)
+}
+
+fn drive_fleet_to_wreck(t: &mut Tide, names: &[String]) {
+    for season in 1..=9u64 {
+        for name in names {
+            at(name, season, 0.1);
+            if t.get_sea().phase == Phase::Wrecked {
+                return;
+            }
+            t.fish(10_000);
+        }
+        at(&names[0], season + 1, 0.0);
+        t.tick();
+        if t.get_sea().phase == Phase::Wrecked {
+            return;
+        }
+    }
+}
+
+#[test]
+fn crossing_the_line_wrecks_every_boat_and_burns_half_the_stake() {
+    let (mut t, names) = many_boats();
+    drive_fleet_to_wreck(&mut t, &names);
+    assert_eq!(t.get_sea().phase, Phase::Wrecked);
+    let supply_before_last_batch = t.ft_total_supply().0;
+    t.settle_wreck();
+    let expected_last_batch = 5 * (4_950_000 * ONE) * WRECK_BURN_BPS / BPS;
+    assert_eq!(
+        supply_before_last_batch - t.ft_total_supply().0,
+        expected_last_batch
+    );
+    assert_eq!(
+        t.reckoning_history[0].burned_total.0,
+        25 * expected_last_batch / 5
+    );
+    for name in names {
+        assert_eq!(t.get_boat(acc(&name)).unwrap().boat.stake.0, 0);
+    }
+    assert_eq!(t.get_sea().staked_total.0, 0);
+    assert_eq!(t.get_reckoning()["phase"], "Wrecked");
+}
+
+#[test]
+fn settle_wreck_is_bounded_and_idempotent() {
+    let (mut t, names) = many_boats();
+    drive_fleet_to_wreck(&mut t, &names);
+    assert!(t.wreck_cursor > 0 && t.wreck_cursor <= WRECK_BATCH as u32);
+    t.settle_wreck();
+    assert!(!t.wreck_pending);
+    let supply = t.ft_total_supply().0;
+    t.settle_wreck();
+    assert_eq!(t.ft_total_supply().0, supply);
+}
+
+#[test]
+fn funded_reseed_decays_capacity_and_enters_recovery() {
+    let mut t = setup();
+    let names: Vec<String> = BOATS.iter().map(|name| name.to_string()).collect();
+    drive_fleet_to_wreck(&mut t, &names);
+    at("ana.testnet", 10, 0.1);
+    t.contribute_reseed(U128(RESEED_COST));
+    let sea = t.get_sea();
+    assert_eq!(sea.generation, 1);
+    assert_eq!(sea.phase, Phase::Recovering);
+    assert_eq!(sea.carrying_capacity.0, K_FISH * K_DECAY_BPS / BPS);
+    assert_eq!(
+        sea.stock_fish.0,
+        sea.carrying_capacity.0 * RESEED_HEALTHY_BPS / BPS
+    );
+    assert_eq!(
+        sea.quota_per_season.0,
+        quota_fish_for_capacity(sea.carrying_capacity.0)
+    );
+    assert_eq!(t.get_reckoning()["contributors"], serde_json::json!([]));
+}
+
+#[test]
+fn deadline_reseed_uses_fallback_and_recovery_tax_takes_full_fish() {
+    let mut t = setup();
+    let names: Vec<String> = BOATS.iter().map(|name| name.to_string()).collect();
+    drive_fleet_to_wreck(&mut t, &names);
+    at("ana.testnet", 70, 0.1);
+    t.tick();
+    assert_eq!(t.get_sea().phase, Phase::Recovering);
+    assert_eq!(t.get_sea().stock_fish.0, 240_000);
+
+    at("ana.testnet", 70, 0.2);
+    t.stake(U128(5_000_000 * ONE));
+    at("ana.testnet", 71, 0.1);
+    let opening = t.get_sea().stock_fish.0 * MICRO;
+    let full = t.get_boat(acc("ana.testnet")).unwrap().full_effort_catch.0;
+    let supply_before = t.ft_total_supply().0;
+    let minted = t.fish(10_000).0;
+    at("ana.testnet", 72, 0.0);
+    t.tick();
+    let taken = full;
+    assert_eq!(minted + t.recovery_burned, taken);
+    assert_eq!(t.recovery_burned, taken * RECOVERY_TAX_BPS / BPS);
+    assert_eq!(
+        t.get_sea().stock_fish.0,
+        next_stock_micro_with_capacity(opening, taken / UNITS_PER_MICRO, 800_000) / MICRO
+    );
+    assert_eq!(
+        t.ft_total_supply().0 - supply_before,
+        minted - fuel_units(4_950_000 * ONE, BPS)
+    );
+}
+
+#[test]
+fn capacity_decay_eventually_loses_the_sea_forever() {
+    let mut capacity = K_FISH;
+    for _ in 0..10 {
+        capacity = capacity * K_DECAY_BPS / BPS;
+    }
+    assert!(capacity <= A_FISH);
+    assert!(capacity > A_FISH * K_DECAY_BPS / BPS);
+}
+
+#[test]
+fn wreck_loss_beats_the_raiders_final_grab() {
+    let mut raider = setup();
+    let starting_stake = raider.get_boat(acc("greedy.testnet")).unwrap().boat.stake.0;
+    let names: Vec<String> = BOATS.iter().map(|name| name.to_string()).collect();
+    drive_fleet_to_wreck(&mut raider, &names);
+    assert_eq!(raider.get_sea().phase, Phase::Wrecked);
+
+    // Compare the largest one-season grab with the wreck loss, conservatively charging
+    // the fair-share boat a full-effort fuel bill.
+    let fleet = 5 * starting_stake;
+    let final_grab = catch_units(773_080 * MICRO, starting_stake, fleet, BPS);
+    let wreck_loss = starting_stake * WRECK_BURN_BPS / BPS;
+    let raider_net = final_grab.saturating_sub(fuel_units(starting_stake, BPS) + wreck_loss);
+    let fair_net = fair_share_for_capacity_units(starting_stake, fleet, K_FISH)
+        .saturating_sub(fuel_units(starting_stake, BPS));
+    assert!(
+        raider_net < fair_net,
+        "raider {} keeper {} stake {}",
+        raider_net,
+        fair_net,
+        starting_stake
+    );
 }

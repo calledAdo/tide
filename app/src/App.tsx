@@ -52,11 +52,16 @@ function saveTransaction(result: TransactionResult, label: string): void {
 
 const ALREADY_CLAIMED_TOAST =
   'You already claimed your test TIDE; it is in your wallet or your boat.';
+const NOT_REGISTERED_TOAST =
+  'Your account is not registered on this sea yet — registering now.';
 
 function toastErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : 'Transaction failed.';
   if (/already claimed/i.test(message)) {
     return ALREADY_CLAIMED_TOAST;
+  }
+  if (/register first with storage_deposit/i.test(message)) {
+    return NOT_REGISTERED_TOAST;
   }
   if (/doesn['’]t have enough balance/i.test(message)) {
     return 'Not enough TIDE in your wallet for this.';
@@ -101,14 +106,21 @@ export default function App() {
         }
         : item));
     }).catch((error: unknown) => {
+      const rawMessage = error instanceof Error ? error.message : String(error);
       const message = toastErrorMessage(error);
+      const registrationRequired = /register first with storage_deposit/i.test(rawMessage);
       if (label === 'Claim faucet' && message === ALREADY_CLAIMED_TOAST
         && walletState.account) {
         markFaucetClaimed(walletState.account);
         refresh();
       }
       setToasts((items) => items.map((item) => item.id === id
-        ? { ...item, kind: 'error', text: message }
+        ? {
+          ...item,
+          kind: 'error',
+          text: message,
+          ...(registrationRequired ? { retry: () => run(label, task) } : {}),
+        }
         : item));
     });
   };
@@ -126,7 +138,7 @@ export default function App() {
           onConnect={connect} run={run} onRefresh={refresh} />
         : route === 'boat'
           ? <BoatPage wallet={walletState} walletApi={wallet} snapshot={snapshot}
-            onConnect={connect} run={run} onRefresh={refresh} />
+            tideClient={client} onConnect={connect} run={run} onRefresh={refresh} />
           : route === 'replay' ? <ReplayPage /> : <HowPage params={snapshot.params} />;
   return <>
     <TopBar snapshot={snapshot} wallet={walletState} onConnect={connect}

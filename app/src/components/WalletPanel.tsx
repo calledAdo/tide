@@ -15,6 +15,7 @@ import {
   TideWallet,
   type TransactionResult,
 } from '../near/wallet';
+import { callWithStorageRegistration, claimFaucet } from '../near/registration';
 import type { TideSnapshot } from '../near/types';
 import { asString } from '../near/types';
 import {
@@ -54,6 +55,7 @@ export function WalletPanel({
   const [recipient, setRecipient] = useState('');
   const [topupAmount, setTopupAmount] = useState('');
   const [unstakeAmount, setUnstakeAmount] = useState('');
+  const [faucetProgress, setFaucetProgress] = useState('');
   const [working, setWorking] = useState('');
   const [localFaucetClaimed, setLocalFaucetClaimed] = useState(false);
   const [indexerFaucetClaimed, setIndexerFaucetClaimed] = useState(false);
@@ -224,7 +226,7 @@ export function WalletPanel({
                   disabled={wallet.state.dev || Boolean(working)}
                   onClick={() => execute(
                     'Claim faucet',
-                    () => wallet.call('claim_faucet'),
+                    () => claimFaucet(wallet, tideClient, account, setFaucetProgress),
                     () => {
                       markFaucetClaimed(account);
                       setLocalFaucetClaimed(true);
@@ -234,6 +236,7 @@ export function WalletPanel({
                   GET TEST TIDE · TESTNET ONLY
                 </button>
               )}
+              {faucetProgress && <p className="wallet-note" role="status">{faucetProgress}</p>}
             </div>
             {qr && <img className="wallet-qr" src={qr} alt="QR code for NEAR deposit address" />}
           </div>
@@ -263,21 +266,16 @@ export function WalletPanel({
                 || transferTooMuch || Boolean(working)}
               onClick={() => execute('Send TIDE', async () => {
                 const target = recipient.trim();
-                const registered = await tideClient.storageBalance(target);
-                if (!registered) {
-                  setTransferNote('Registering the recipient first…');
-                  const bounds = await tideClient.storageBounds();
-                  await wallet.call('storage_deposit', {
-                    account_id: target,
-                    registration_only: true,
-                  }, BigInt(bounds.min));
-                }
-                setTransferNote('Sending TIDE…');
-                return wallet.call('ft_transfer', {
-                  receiver_id: target,
-                  amount: tideUnits(tideAmount).toString(),
-                  memo: 'TIDE transfer',
-                }, 1n);
+                return callWithStorageRegistration(wallet, tideClient, target, {
+                  method: 'ft_transfer',
+                  args: {
+                    receiver_id: target,
+                    amount: tideUnits(tideAmount).toString(),
+                    memo: 'TIDE transfer',
+                  },
+                  deposit: 1n,
+                  progress: 'Sending TIDE…',
+                }, setTransferNote);
               })}
             >
               SEND TIDE · 1 YOCTO
@@ -328,9 +326,16 @@ export function WalletPanel({
             <button
               className="secondary wallet-action"
               disabled={!topupAmount || topupTooMuch || Boolean(working)}
-              onClick={() => execute('Top up boat', () => wallet.call('stake', {
-                amount: tideUnits(topupAmount).toString(),
-              }))}
+              onClick={() => execute('Top up boat', () => callWithStorageRegistration(
+                wallet,
+                tideClient,
+                account,
+                {
+                  method: 'stake',
+                  args: { amount: tideUnits(topupAmount).toString() },
+                  progress: 'Staking…',
+                },
+              ))}
             >
               TOP UP BOAT
             </button>

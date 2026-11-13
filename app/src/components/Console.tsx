@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { tideAmountExceedsBalance, tideUnits } from '../config';
 import { TideWallet, type WalletSnapshot } from '../near/wallet';
+import { callWithStorageRegistration, claimFaucet, type StorageClient } from '../near/registration';
 import { historyApi } from '../near/history';
 import type { BoatView, SeaView, TideSnapshot } from '../near/types';
 import { asString } from '../near/types';
@@ -31,6 +32,7 @@ type ConsoleCall = (
 type ConsoleProps = {
   wallet: WalletSnapshot;
   walletApi: TideWallet;
+  tideClient: StorageClient;
   snapshot: TideSnapshot;
   onConnect: () => void;
   run: RunAction;
@@ -40,6 +42,7 @@ type ConsoleProps = {
 export function Console({
   wallet,
   walletApi,
+  tideClient,
   snapshot,
   onConnect,
   run,
@@ -53,6 +56,7 @@ export function Console({
   const [claimed, setClaimed] = useState(false);
   const [indexerClaimed, setIndexerClaimed] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
+  const [actionProgress, setActionProgress] = useState('');
   const stage = assemblyStage(sea, snapshot.assembly);
   const hasBoat = Boolean(boat && Number(asString(boat.boat.stake)) > 0);
   const hasTide = BigInt(snapshot.playerBalance || '0') > 0n;
@@ -107,6 +111,27 @@ export function Console({
       onRefresh();
       return result;
     });
+  const registeredCall = (
+    label: string,
+    method: string,
+    args: Record<string, unknown> = {},
+    _deposit = 0n,
+    done?: () => void,
+  ) => run(label, async () => {
+    if (!account) throw new Error('Connect MetaMask first.');
+    const result = method === 'claim_faucet'
+      ? await claimFaucet(walletApi, tideClient, account, setActionProgress)
+      : await callWithStorageRegistration(
+        walletApi,
+        tideClient,
+        account,
+        { method, args, progress: 'Staking…' },
+        setActionProgress,
+      );
+    done?.();
+    onRefresh();
+    return result;
+  });
 
   return (
     <section className="console">
@@ -139,7 +164,8 @@ export function Console({
           !wallet.progress &&
           !setupRequired &&
           (!sea || sea.seasons_behind <= 40) &&
-          !faucetClaimed && <ClaimStep wallet={wallet} call={call} setClaimed={setClaimed} />}
+          !faucetClaimed && <ClaimStep wallet={wallet} call={registeredCall}
+            setClaimed={setClaimed} progress={actionProgress} />}
         {account &&
           !wallet.progress &&
           !setupRequired &&
@@ -149,8 +175,9 @@ export function Console({
             <BuildStep
               buildAmount={buildAmount}
               setBuildAmount={setBuildAmount}
-              call={call}
+              call={registeredCall}
               balance={snapshot.playerBalance}
+              progress={actionProgress}
             />
           )}
         {account &&
@@ -245,10 +272,12 @@ function ClaimStep({
   wallet,
   call,
   setClaimed,
+  progress,
 }: {
   wallet: WalletSnapshot;
   call: ConsoleCall;
   setClaimed: (value: boolean) => void;
+  progress: string;
 }) {
   return (
     <>
@@ -267,7 +296,7 @@ function ClaimStep({
           })
         }
       >
-        {wallet.dev ? 'NOT AVAILABLE WITH DEV SIGNER' : 'CLAIM FAUCET'}
+        {wallet.dev ? 'NOT AVAILABLE WITH DEV SIGNER' : progress || 'CLAIM FAUCET'}
       </button>
     </>
   );
@@ -278,11 +307,13 @@ function BuildStep({
   setBuildAmount,
   call,
   balance,
+  progress,
 }: {
   buildAmount: string;
   setBuildAmount: (value: string) => void;
   call: ConsoleCall;
   balance: string;
+  progress: string;
 }) {
   const amountTooMuch = tideAmountExceedsBalance(buildAmount, balance);
   return (
@@ -320,7 +351,7 @@ function BuildStep({
           amount: tideUnits(buildAmount).toString(),
         })}
       >
-        BUILD BOAT
+        {progress || 'BUILD BOAT'}
       </button>
     </>
   );
