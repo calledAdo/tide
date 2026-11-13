@@ -50,13 +50,9 @@ Registration, the faucet, and MetaMask setup remain wallet-only actions in dev m
 
 | Contract | Role |
 | --- | --- |
-| `tide-1794517191.memethis-t40-demo.testnet` | **Generation 0, DEAD.** |
-| | Collapsed on day 1103 under demo bots that fished about 77,500 fish a season against 73,155 of
-| | growth. Kept as the exhibit. |
-| `sea-1794591365.tide-sponsor-53394.testnet` | Retired. |
-| | A healthy replacement, superseded when THE RECKONING shipped. No longer used. |
-| `sea.tide-fund-94145.testnet` | **Live.** Keyless, generation 0, with THE RECKONING. |
-| | This is what the app talks to. |
+| `tide-1794517191.memethis-t40-demo.testnet` | **Generation 0, DEAD.** Collapsed on day 1103 under demo bots that fished about 77,500 fish a season against 73,155 of growth. Kept as the exhibit. |
+| `sea-1794591365.tide-sponsor-53394.testnet` | Retired. A healthy replacement, superseded when THE RECKONING shipped. No longer used. |
+| `sea.tide-fund-94145.testnet` | **Live.** Keyless, generation 0, with THE RECKONING. This is what the app talks to. |
 
 The live sea has a 1,000,000-fish carrying capacity. Watch it in the
 [NEARBlocks explorer][live-explorer]. It has **no access keys**; verify with:
