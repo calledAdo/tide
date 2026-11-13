@@ -1,58 +1,44 @@
-import { isEthImplicitAccount, formatAccountAddress, type WalletSnapshot } from '../near/wallet';
-import type { SeaView, TideSnapshot } from '../near/types';
+import { formatAccountAddress, type WalletSnapshot } from '../near/wallet';
+import type { TideSnapshot } from '../near/types';
 import { compactNumber, unitsToNumber, TIDE_DECIMALS } from '../lib/format';
-import { assemblyStage, seconds } from './shared';
 
-type TopBarProps = {
-  sea: SeaView | null;
+type Props = {
   snapshot: TideSnapshot;
   wallet: WalletSnapshot;
   onConnect: () => void;
   onOpenPanel: () => void;
 };
 
-export function TopBar({
-  sea,
-  snapshot,
-  wallet,
-  onConnect,
-  onOpenPanel,
-}: TopBarProps) {
+export function TopBar({ snapshot, wallet, onConnect, onOpenPanel }: Props) {
   const href = location.hash || '#/';
-  const stage = assemblyStage(sea, snapshot.assembly);
-
+  const nav = [['#/', 'SEA'], ['#/harbour', 'HARBOUR'], ['#/agora', 'AGORA'], ['#/boat', 'YOUR BOAT']];
   return (
     <header className="topbar">
       <a className="brand" href="#/">
-        <b>TD</b>
-        <span>$TIDE</span>
-        <i>| NEAR</i>
+        <b>TD</b><span>$TIDE</span><i>| NEAR</i>
       </a>
       <nav aria-label="Primary">
-        <a className={href === '#/' || href === '' ? 'active' : ''} href="#/">
-          PLAY
-        </a>
-        <a className={href === '#/replay' ? 'active' : ''} href="#/replay">
-          REPLAY
-        </a>
-        <a className={href === '#/how' ? 'active' : ''} href="#/how">
-          HOW IT WORKS
-        </a>
+        {nav.map(([url, label]) => (
+          <a className={href === url ? 'active' : ''} href={url} key={url}>
+            <span className="nav-icon">
+              {label === 'SEA' ? '◒' : label === 'HARBOUR' ? '▤' : label === 'AGORA' ? '⚖' : '◈'}
+            </span>
+            <span>{label}</span>
+          </a>
+        ))}
       </nav>
+      <div className="more-nav">
+        <a href="#/replay" className={href === '#/replay' ? 'active' : ''}>REPLAY</a>
+        <a href="#/how" className={href === '#/how' ? 'active' : ''}>HOW</a>
+      </div>
       <div className="topbar-actions">
-        {sea && (
-          <div className={`season-chip ${stage ? 'assembly' : ''}`}>
-            <b>{stage ? 'ASSEMBLY' : `SEASON ${sea.season}`}</b>
-            <span>{stage ? stage.toUpperCase() : seconds(sea.seconds_left_in_season)}</span>
-          </div>
-        )}
         {wallet.account ? (
           <button className="wallet-chip" onClick={onOpenPanel} aria-label="Open wallet panel">
             <b>{formatAccountAddress(wallet.account)}</b>
             <span>
-              {wallet.dev
-                ? 'DEV SIGNER'
-                : `${compactNumber(unitsToNumber(snapshot.playerBalance, TIDE_DECIMALS))} TIDE`}
+              {wallet.dev ? 'DEV SIGNER' : `${compactNumber(
+                unitsToNumber(snapshot.playerBalance, TIDE_DECIMALS),
+              )} TIDE`}
             </span>
           </button>
         ) : (

@@ -43,6 +43,7 @@ export function WalletPanel({
   const [unstakeAmount, setUnstakeAmount] = useState('');
   const [working, setWorking] = useState('');
   const panelRef = useRef<HTMLElement>(null);
+  const faucetRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (account) {
@@ -53,7 +54,8 @@ export function WalletPanel({
       }).then(setQr).catch(() => setQr(''));
     }
     panelRef.current?.focus();
-  }, [account]);
+    if (snapshot.playerBalance === '0') faucetRef.current?.scrollIntoView({ block: 'start' });
+  }, [account, snapshot.playerBalance]);
 
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
@@ -140,8 +142,8 @@ export function WalletPanel({
             </div>
           </dl>
         </section>
-        <section className="wallet-section">
-          <h3>Deposit</h3>
+        <section className="wallet-section" id="test-tide" ref={faucetRef}>
+          <h3>GET TEST TIDE <small>· TESTNET ONLY</small></h3>
           <div className="deposit-layout">
             <div>
               <p className="wallet-note">Send NEAR or TIDE on NEAR testnet to this address.</p>
@@ -157,14 +159,14 @@ export function WalletPanel({
                   () => wallet.onboard().then(() => ({ hash: '', url: '' })),
                 )}
               >
-                GET TEST NEAR
+                GET TEST NEAR · GAS
               </button>
               <button
                 className="secondary wallet-action"
                 disabled={wallet.state.dev || Boolean(working)}
                 onClick={() => execute('Claim faucet', () => wallet.call('claim_faucet'))}
               >
-                CLAIM 100,000 TIDE
+                GET TEST TIDE · TESTNET ONLY
               </button>
             </div>
             {qr && <img className="wallet-qr" src={qr} alt="QR code for NEAR deposit address" />}

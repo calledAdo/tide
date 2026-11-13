@@ -494,9 +494,13 @@ export class TideWallet {
       const originalIsAuthorized = connector.isAuthorized.bind(connector);
       connector.isAuthorized = async () => {
         const connectorProvider = await connector.getProvider().catch(() => undefined);
-        if (!connectorProvider || typeof connectorProvider !== 'object' || !('request' in connectorProvider)) return false;
+        if (!connectorProvider
+          || typeof connectorProvider !== 'object'
+          || !('request' in connectorProvider)) return false;
         try {
-          const accounts = await (connectorProvider as { request: (request: { method: string }) => Promise<unknown> })
+          const accounts = await (connectorProvider as {
+            request: (request: { method: string }) => Promise<unknown>;
+          })
             .request({ method: 'eth_accounts' });
           return Array.isArray(accounts) && accounts.length > 0 ? originalIsAuthorized() : false;
         } catch {
@@ -510,7 +514,12 @@ export class TideWallet {
     if ((recentConnectorId && recentConnectorId !== this.metaMaskConnectorId) || staleConnections) {
       await wagmi.storage?.removeItem('recentConnectorId');
       if (staleConnections) localStorage.removeItem('wagmi.store');
-      wagmi.setState((state) => ({ ...state, connections: new Map(), current: null, status: 'disconnected' }));
+      wagmi.setState((state) => ({
+        ...state,
+        connections: new Map(),
+        current: null,
+        status: 'disconnected',
+      }));
     }
     await withMetaMaskTimeout(wagmiReconnect(wagmi, { connectors: wagmi.connectors }));
 
@@ -575,11 +584,14 @@ export class TideWallet {
       try {
         await this.initializeWallet();
       } catch (error) {
-        if (!(error instanceof Error) || !/MetaMask not detected in this browser/i.test(error.message)) throw error;
+        if (!(error instanceof Error)
+          || !/MetaMask not detected in this browser/i.test(error.message)) throw error;
         await new Promise((resolve) => setTimeout(resolve, 500));
         await this.initializeWallet();
       }
-      if (!this.wagmi || !this.provider || !this.wallet) throw new Error('Wallet setup is incomplete. Try again.');
+      if (!this.wagmi || !this.provider || !this.wallet) {
+        throw new Error('Wallet setup is incomplete. Try again.');
+      }
       const fallback = this.wagmi.connectors[0];
       if (!fallback) throw new Error('Wallet setup is incomplete. Try again.');
       const connector = selectMetaMaskConnector(this.wagmi.connectors, fallback);
@@ -604,7 +616,8 @@ export class TideWallet {
         throw new Error('MetaMask did not return a NEAR eth-implicit account.');
       }
       const connected = getAccount(this.wagmi);
-      if (connected.connector?.id !== this.metaMaskConnectorId || connected.address?.toLowerCase() !== address) {
+      if (connected.connector?.id !== this.metaMaskConnectorId
+        || connected.address?.toLowerCase() !== address) {
         throw new Error('Reconnect MetaMask before signing.');
       }
       this.setState({ account: address, progress: 'Switching to NEAR testnet…' });
@@ -630,7 +643,12 @@ export class TideWallet {
         throw new Error(message || `Account setup failed (${response.status}).`);
       }
       this.setState({ progress: 'Approve the relayer key in MetaMask…' });
-      await activateRelayerKey(this.wagmi, provider as EIP1193Provider, address, await getRelayerPublicKeyHex());
+      await activateRelayerKey(
+        this.wagmi,
+        provider as EIP1193Provider,
+        address,
+        await getRelayerPublicKeyHex(),
+      );
       const signed = await withMetaMaskTimeout(this.wallet.signIn({ contractId: CONTRACT }));
       this.assertMetaMaskAccount(address);
       const account = signed[0]?.accountId ?? address;

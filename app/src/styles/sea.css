@@ -38,6 +38,14 @@
   background: var(--water);
 }
 
+.sea-caption {
+  padding: 9px 17px 13px;
+  color: var(--muted);
+  font: 800 9px/1.5 JetBrains Mono;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
 .sea-visual svg {
   display: block;
   width: 100%;
@@ -245,5 +253,9 @@
 
   .sea-readout strong {
     font-size: 18px;
+  }
+
+  .sea-caption {
+    padding-inline: 12px;
   }
 }

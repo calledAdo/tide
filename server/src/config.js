@@ -11,6 +11,9 @@ const DEFAULTS = {
   KEEPER_INTERVAL_MS: '30000',
   KEEPER_MIN_BEHIND: '30',
   KEEPER_ENABLED: 'true',
+  INDEXER_ENABLED: 'true',
+  FASTNEAR_TX_URL: 'https://tx.test.fastnear.com',
+  INDEXER_POLL_MS: '10000',
 };
 
 function value(env, name) {
@@ -83,6 +86,9 @@ export function loadConfig(env = process.env) {
     keeperIntervalMs: positiveInteger(value(env, 'KEEPER_INTERVAL_MS'), 'KEEPER_INTERVAL_MS'),
     keeperMinBehind: nonNegativeInteger(value(env, 'KEEPER_MIN_BEHIND'), 'KEEPER_MIN_BEHIND'),
     keeperEnabled: booleanValue(value(env, 'KEEPER_ENABLED'), 'KEEPER_ENABLED'),
+    indexerEnabled: booleanValue(value(env, 'INDEXER_ENABLED'), 'INDEXER_ENABLED'),
+    fastNearTxUrl: value(env, 'FASTNEAR_TX_URL').replace(/\/$/, ''),
+    indexerPollMs: positiveInteger(value(env, 'INDEXER_POLL_MS'), 'INDEXER_POLL_MS'),
     sponsorMinimumYocto: nearToYocto('1'),
   };
 }

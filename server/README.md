@@ -4,6 +4,7 @@ This Node 22 service provides two small operational functions for the TIDE testn
 
 - `POST /testnet/onboard` funds an eth-implicit NEAR account up to the configured NEAR amount and registers it with the TIDE contract.
 - The keeper periodically views `get_sea()` and sends `tick({})` when seasons are more than `KEEPER_MIN_BEHIND` behind, up to five ticks per run. The default threshold is 30.
+- The event indexer backfills and follows TIDE transactions through FastNEAR, persisting `events.jsonl` and processed transaction hashes in `DATA_DIR`.
 
 The service listens on `127.0.0.1:3101` by default and is intended to sit behind Caddy. It uses only `near-api-js` and Node built-ins. The sponsor private key is used only in memory and is never logged.
 
@@ -12,6 +13,8 @@ The service listens on `127.0.0.1:3101` by default and is intended to sit behind
 `GET /health` returns the testnet, TIDE contract, sponsor, sponsor balance, seasons behind, `keeperMinBehind`, keeper state, and today’s onboarding count.
 
 `POST /testnet/onboard` accepts JSON such as `{"accountId":"0x..."}`. The account must match `0x` plus 40 lowercase hexadecimal characters. A successful response contains the funded account, target NEAR amount, registration status, and transaction hashes. Requests are limited to one funding per account per 24 hours, five accounts per client IP per 24 hours, and the configured daily total. The limiter is persisted in `DATA_DIR`.
+
+The indexer endpoints are `GET /indexer/status`, `GET /events`, `GET /boat/:account/history`, `GET /assemblies`, and `GET /leaderboard?by=catch|net|indictments`. They return JSON with `cache-control: no-store`.
 
 Only origins in `FRONTEND_ORIGINS` receive CORS headers. The service accepts JSON POST requests and GET health requests, with a 2 KB request body limit.
 
@@ -40,6 +43,9 @@ FRONTEND_ORIGINS
 | `KEEPER_INTERVAL_MS` | `30000` |
 | `KEEPER_MIN_BEHIND` | `30` |
 | `KEEPER_ENABLED` | `true` |
+| `INDEXER_ENABLED` | `true` |
+| `FASTNEAR_TX_URL` | `https://tx.test.fastnear.com` |
+| `INDEXER_POLL_MS` | `10000` |
 
 ## Local checks
 

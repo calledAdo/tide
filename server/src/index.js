@@ -5,6 +5,7 @@ import { createKeeper } from './keeper.js';
 import { createNear } from './near.js';
 import { onboardAccount } from './onboard.js';
 import { FileRateLimiter } from './ratelimit.js';
+import { createIndexer } from './indexer.js';
 
 function sendJson(response, status, body, headers = {}) {
   const payload = JSON.stringify(body);
@@ -43,7 +44,18 @@ function readBody(request) {
   });
 }
 
-export function createHandler({ config, near, limiter, keeper, now = () => Date.now() }) {
+function disabledIndexer() {
+  return {
+    status: () => ({ enabled: false, source: null, txsSeen: 0, txsTotal: null, lastPollAt: null, events: 0, lastError: null }),
+  };
+}
+
+function queryLimit(value, fallback, maximum) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? Math.max(1, Math.min(maximum, parsed)) : fallback;
+}
+
+export function createHandler({ config, near, limiter, keeper, indexer = disabledIndexer(), now = () => Date.now() }) {
   return async (request, response) => {
     const cors = originHeaders(request, config);
     if (request.method === 'OPTIONS') {
@@ -56,11 +68,8 @@ export function createHandler({ config, near, limiter, keeper, now = () => Date.
       return;
     }
 
-    if (request.url !== '/health' && request.url !== '/testnet/onboard') {
-      sendJson(response, 404, { error: 'Not found.' }, cors);
-      return;
-    }
-    if (request.method === 'GET' && request.url === '/health') {
+    const url = new URL(request.url, 'http://localhost');
+    if (request.method === 'GET' && url.pathname === '/health') {
       let sponsorBalanceNear = null;
       let seasonsBehind = null;
       try { sponsorBalanceNear = yoctoToNear(await near.sponsorBalance()); } catch { /* health remains useful during RPC outage */ }
@@ -74,10 +83,54 @@ export function createHandler({ config, near, limiter, keeper, now = () => Date.
         keeperMinBehind: config.keeperMinBehind,
         keeper: keeper.state,
         onboardedToday: await limiter.countToday(now()),
+        indexer: indexer.status(),
       }, cors);
       return;
     }
-    if (request.method !== 'POST' || request.url !== '/testnet/onboard') {
+    if (request.method === 'GET' && url.pathname === '/indexer/status') {
+      sendJson(response, 200, indexer.status(), { ...cors, 'cache-control': 'no-store' });
+      return;
+    }
+    if (request.method === 'GET' && url.pathname === '/events') {
+      const before = url.searchParams.has('before') ? Number(url.searchParams.get('before')) : null;
+      sendJson(response, 200, {
+        events: indexer.events({
+          limit: queryLimit(url.searchParams.get('limit'), 50, 200),
+          before: Number.isSafeInteger(before) ? before : null,
+          event: url.searchParams.get('event') || null,
+          account: url.searchParams.get('account') || null,
+        }),
+      }, { ...cors, 'cache-control': 'no-store' });
+      return;
+    }
+    const boatMatch = url.pathname.match(/^\/boat\/([^/]+)\/history$/);
+    if (request.method === 'GET' && boatMatch) {
+      let account;
+      try { account = decodeURIComponent(boatMatch[1]); } catch { account = null; }
+      if (!account) {
+        sendJson(response, 400, { error: 'Invalid account.' }, { ...cors, 'cache-control': 'no-store' });
+        return;
+      }
+      sendJson(response, 200, indexer.boatHistory(account), { ...cors, 'cache-control': 'no-store' });
+      return;
+    }
+    if (request.method === 'GET' && url.pathname === '/assemblies') {
+      sendJson(response, 200, indexer.assemblies(
+        queryLimit(url.searchParams.get('limit'), 20, 100),
+        url.searchParams.get('active') === 'true',
+      ), { ...cors, 'cache-control': 'no-store' });
+      return;
+    }
+    if (request.method === 'GET' && url.pathname === '/leaderboard') {
+      const by = url.searchParams.get('by') || 'catch';
+      if (!['catch', 'net', 'indictments'].includes(by)) {
+        sendJson(response, 400, { error: 'by must be catch, net, or indictments.' }, { ...cors, 'cache-control': 'no-store' });
+        return;
+      }
+      sendJson(response, 200, indexer.leaderboard(by), { ...cors, 'cache-control': 'no-store' });
+      return;
+    }
+    if (request.method !== 'POST' || url.pathname !== '/testnet/onboard') {
       sendJson(response, 404, { error: 'Not found.' }, cors);
       return;
     }
@@ -108,7 +161,8 @@ export function buildService(config = loadConfig()) {
   const near = createNear(config);
   const limiter = new FileRateLimiter(config.dataDir);
   const keeper = createKeeper({ config, near });
-  return { config, near, limiter, keeper, handler: createHandler({ config, near, limiter, keeper }) };
+  const indexer = createIndexer({ config });
+  return { config, near, limiter, keeper, indexer, handler: createHandler({ config, near, limiter, keeper, indexer }) };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -118,4 +172,5 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log(`tide server listening on ${service.config.host}:${service.config.port}`);
   });
   service.keeper.start();
+  service.indexer.start();
 }
