@@ -18,11 +18,10 @@ export function TopBar({ snapshot, wallet, onConnect, onOpenPanel }: Props) {
   const clock = useSeasonClock(snapshot.sea);
   const seaReady = Boolean(snapshot.sea && !snapshot.sea.dead
     && snapshot.sea.seasons_behind <= 40);
+  const ready = Boolean(wallet.account && seaReady && boat?.can_fish_now
+    && boatCanFishAtSeason(boat, clock.season));
   const needsBoat = Boolean(
-    wallet.account && (
-      (seaReady && boatCanFishAtSeason(boat, clock.season))
-      || assemblyStage(snapshot.sea, snapshot.assembly)
-    ),
+    ready || (wallet.account && assemblyStage(snapshot.sea, snapshot.assembly)),
   );
   return (
     <header className="topbar">
@@ -35,8 +34,9 @@ export function TopBar({ snapshot, wallet, onConnect, onOpenPanel }: Props) {
             <span className="nav-icon">
               {label === 'SEA' ? '◒' : label === 'HARBOUR' ? '▤' : label === 'AGORA' ? '⚖' : '◈'}
             </span>
-            <span>
-              {label}
+            <span title={label === 'YOUR BOAT' && ready
+              ? 'can fish today, has not yet' : undefined}>
+              {label === 'YOUR BOAT' && ready ? 'YOUR BOAT · READY' : label}
               {label === 'YOUR BOAT' && needsBoat && (
                 <i className="nav-dot" aria-label="Action available" />
               )}

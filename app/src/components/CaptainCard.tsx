@@ -9,7 +9,7 @@ import {
   type BoatHistory,
 } from '../near/history';
 import { formatTide } from '../lib/format';
-import { shortName } from './shared';
+import { boatStatus, shortName, useSeasonClock } from './shared';
 import { readBotAccounts } from '../near/bots';
 
 type Props = {
@@ -39,6 +39,7 @@ export function CaptainCard({ account, boat, snapshot, onClose }: Props) {
   }, [account]);
   const exile = snapshot.exiles.find(([name]) => name === account)?.[1] ?? boat?.exiled_until;
   const indicted = snapshot.indictments.some(([name]) => name === account);
+  const clock = useSeasonClock(snapshot.sea);
   const stake = Number(asString(boat?.boat.stake));
   const tier = stake >= 1_000_000e18 ? 'FACTORY SHIP' : stake >= 50_000e18 ? 'TRAWLER' : 'DINGHY';
   const latest = history?.trips.at(-1);
@@ -54,6 +55,11 @@ export function CaptainCard({ account, boat, snapshot, onClose }: Props) {
           ? Math.max(0, Number(indictmentTrip.catch) - Number(indictmentTrip.fairShare))
           : 0)
     : 0;
+  const fairShare = Number(asString(boat?.fair_share));
+  const indictmentRatio = fairShare > 0 && Number(overShare) > 0
+    ? (1 + Number(overShare) / fairShare).toFixed(1)
+    : '0.0';
+  const status = boatStatus(boat, clock.season, indicted, indictmentRatio, exile);
   return (
     <div className="drawer-backdrop" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose();
@@ -79,9 +85,11 @@ export function CaptainCard({ account, boat, snapshot, onClose }: Props) {
           <div><span>HULL</span><b>{tier}</b></div>
           <div><span>STAKE</span><b>{formatTide(asString(boat?.boat.stake))}</b></div>
           <div><span>TODAY&apos;S CATCH</span><b>{latest ? formatTide(latest.catch) : '—'}</b></div>
-          <div><span>STATUS</span><b className={exile ? 'danger-text' : indicted ? 'amber-text' : ''}>
-            {exile ? `EXILED UNTIL DAY ${exile}` : indicted ? 'INDICTED' : 'FAIR'}
-          </b></div>
+          <div><span>STATUS</span><b
+            className={status.key === 'EXILED' ? 'danger-text'
+              : status.key === 'INDICTED' ? 'amber-text' : ''}
+            title={status.tooltip}
+          >{status.label}</b></div>
         </div>
         <section className="drawer-section">
           <h3>LAST 5 TRIPS</h3>

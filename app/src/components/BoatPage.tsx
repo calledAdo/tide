@@ -11,7 +11,7 @@ import type { TideWallet, WalletSnapshot } from '../near/wallet';
 import { callWithStorageRegistration, type StorageClient } from '../near/registration';
 import { tideAmountExceedsBalance, tideUnits } from '../config';
 import { compactNumber, formatTide } from '../lib/format';
-import { RunAction, seaPhase, seconds, shortName, useSeasonClock } from './shared';
+import { boatStatus, RunAction, seaPhase, seconds, shortName, useSeasonClock } from './shared';
 import { YourDay } from './YourDay';
 
 type Props = {
@@ -110,13 +110,17 @@ export function BoatPage({
   const phase = seaPhase(snapshot.sea);
   const exiled = boat?.exiled_until && boat.exiled_until > currentSeason;
   const indicted = snapshot.indictments.some(([name]) => name === account);
-  const blocked = exiled
-    ? `EXILED UNTIL DAY ${boat?.exiled_until}`
-    : phase === 'Wrecked' ? 'SEA WRECKED'
-    : indicted ? 'INDICTED UNTIL ASSEMBLY CLOSES'
-    : boat?.boat.stake_season === currentSeason ? 'BUILT TODAY' : '';
-  const latest = history?.trips.at(-1);
   const fair = Number(asString(boat?.fair_share));
+  const indictmentOverage = snapshot.indictments.find(([name]) => name === account)?.[1];
+  const indictmentRatio = fair > 0 && indictmentOverage !== undefined
+    ? (1 + Number(asString(indictmentOverage)) / fair).toFixed(1)
+    : '0.0';
+  const status = boatStatus(boat, currentSeason, indicted, indictmentRatio);
+  const blocked = exiled
+    ? status.label
+    : phase === 'Wrecked' ? 'SEA WRECKED'
+    : indicted || boat?.boat.stake_season === currentSeason ? status.label : '';
+  const latest = history?.trips.at(-1);
   const fullCatch = Number(asString(boat?.full_effort_catch));
   const fairEffort = fullCatch > 0 ? Math.max(1, Math.round(fair / fullCatch * 100)) : 0;
   const fullFuelRaw = BigInt(asString(boat?.full_effort_fuel));
@@ -132,11 +136,11 @@ export function BoatPage({
     <main className="route-page boat-page">
       <div className="route-heading">
         <div><p className="eyebrow">CAPTAIN&apos;S LOG · {shortName(account)}</p><h1>YOUR BOAT</h1></div>
-        <span>{blocked || 'ACTIVE HULL'}</span>
+        <span title={status.tooltip}>{status.label}</span>
       </div>
       <section className="boat-today">
         <div className="section-title">
-          <div><p className="eyebrow">01 · TODAY</p><h2>THE FISHING DECISION</h2></div>
+          <div><p className="eyebrow">01 · TODAY</p><h2>TODAY&apos;S DECISION</h2></div>
         </div>
         <YourDay wallet={wallet} walletApi={walletApi} snapshot={snapshot} onConnect={onConnect}
           run={run} onRefresh={onRefresh} wreckReport={wreckReport} />

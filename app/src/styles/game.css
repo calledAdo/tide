@@ -75,6 +75,7 @@
 .boat-glyph.you path { fill: var(--signal); stroke: var(--signal); }
 .boat-glyph text { fill: var(--ink); font: 800 8px JetBrains Mono; }
 .boat-glyph.you text { fill: var(--signal); }
+.boat-glyph .boat-status { font-size: 7px; }
 .boat-glyph .flag { fill: var(--amber); font-size: 8px; }
 .you-pennant { font-size: 7px !important; }
 .exile-island path:first-child {
@@ -140,14 +141,6 @@
   font: 800 9px JetBrains Mono;
   text-decoration: underline;
 }
-.fish-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin: 18px 0 12px; }
-.fish-choice button { display: grid; gap: 7px; min-height: 155px; padding: 13px; text-align: left; }
-.fish-choice b { font: 900 22px Big Shoulders Display; }
-.fish-choice strong { font: 800 16px JetBrains Mono; }
-.fish-choice span, .fish-choice small { color: var(--muted); font: 800 9px JetBrains Mono; }
-.fish-choice small { margin-top: auto; color: var(--fair); }
-.fish-choice .hard-choice { border-color: var(--amber); background: var(--amber-bg); }
-.fish-choice .hard-choice small { color: var(--amber); }
 .effort-panel {
   margin-top: 17px;
   padding: 13px;
@@ -180,7 +173,23 @@
   pointer-events: none;
 }
 .effort-scale { display: flex; justify-content: space-between; }
-.fair-label { margin: 7px 0 0; color: var(--fair); }
+.fair-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 7px 0 0;
+  color: var(--fair);
+}
+.snap-fair {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  color: var(--fair);
+  background: transparent;
+  font: 800 8px JetBrains Mono;
+  text-decoration: underline;
+}
 .fuel-gauge {
   position: relative;
   height: 78px;
@@ -206,11 +215,6 @@
 .consequence { margin: 8px 0; color: var(--fair); }
 .consequence.is-amber { color: var(--amber); }
 .recovery-tax-note { margin: 5px 0; color: var(--signal); font: 800 9px JetBrains Mono; }
-.fish-presets { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 13px; }
-.fish-presets button { min-height: 34px; font: 800 10px JetBrains Mono; }
-.fish-presets .fair-choice[aria-pressed='true'] { border-width: 2px; background: #dbeedc; }
-.fish-presets .hard-choice { border-color: var(--amber); background: var(--amber-bg); }
-.fish-presets .hard-choice[aria-pressed='true'] { border-width: 2px; }
 .fish-button { width: 100%; margin-top: 7px; }
 .rigging-card { border-top-color: var(--signal); }
 .rigging-progress { height: 8px; margin: 15px 0; background: var(--marker); }
@@ -784,8 +788,6 @@ button.harbour-row:hover, button.harbour-row.is-you { background: #e5ebff; }
   .health-grid > div:nth-child(2) { border-right: 0; }
   .health-grid > div:nth-child(3) { border-top: 1px solid var(--rule); }
   .health-chart { border-top: 1px solid var(--rule); }
-  .fish-choice { grid-template-columns: 1fr; }
-  .fish-choice button { min-height: 125px; }
   .effort-control { grid-template-columns: minmax(0, 1fr) 54px; gap: 9px; }
   .effort-readout { grid-template-columns: 1fr 1fr; }
   .stake-presets b { font-size: 9px; }

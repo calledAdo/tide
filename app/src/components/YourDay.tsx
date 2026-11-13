@@ -62,7 +62,7 @@ function FishingPanel({
     * BigInt(effort) / 100n;
   const fuelTooMuch = fuelRaw > BigInt(walletBalance || '0');
   const walletTide = formatTide(walletBalance);
-  const amber = effort > fairEffort;
+  const amber = fair > 0 && preview > fair;
   return (
     <div className={`effort-panel ${amber ? 'is-over' : ''} ${disabled ? 'is-disabled' : ''} ${
       recovering ? 'is-recovering' : ''
@@ -84,7 +84,15 @@ function FishingPanel({
           />
           <i className="fair-tick" style={{ left: `${fairEffort}%` }} />
           <div className="effort-scale"><span>1%</span><span>100%</span></div>
-          <p className="fair-label">FAIR SHARE · {fairEffort}%</p>
+          <div className="fair-label">
+            <span>FAIR SHARE · {fairEffort}%</span>
+            <button
+              className="snap-fair"
+              type="button"
+              disabled={disabled}
+              onClick={() => onEffort(fairEffort)}
+            >SNAP TO FAIR SHARE</button>
+          </div>
         </div>
         <div className="fuel-gauge" aria-label={`Fuel use ${effort}%`}>
           <div className="fuel-gauge-fill" style={{ height: `${effort}%` }} />
@@ -96,11 +104,10 @@ function FishingPanel({
         burns twice the fuel.
       </p>
       <div className="preview-grid effort-readout">
-        <span>GROSS CATCH <b>{formatTideAmount(preview)} TIDE</b></span>
-        {recovering && <span>YOU RECEIVE <b>{formatTideAmount(afterTax)} TIDE</b></span>}
+        <span>CATCH <b>{formatTideAmount(preview)} TIDE</b></span>
         <span>FUEL <b>{formatTideAmount(fuel)} TIDE</b></span>
         <span>NET <b>{formatTideAmount(afterTax - fuel)} TIDE</b></span>
-        <span>{over.toFixed(1)}× <b>YOUR SHARE</b></span>
+        <span><b>{over.toFixed(1)}× YOUR SHARE</b></span>
       </div>
       {recovering && (
         <p className="recovery-tax-note">RECOVERY TAX · HALF OF GROSS CATCH IS BURNED</p>
@@ -115,20 +122,6 @@ function FishingPanel({
           you need {formatTideAmount(fuel)} TIDE of fuel; your wallet holds {walletTide}
         </p>
       )}
-      <div className="fish-presets">
-        <button
-          className="fair-choice"
-          disabled={disabled}
-          aria-pressed={effort === fairEffort}
-          onClick={() => onEffort(fairEffort)}
-        >FISH FAIR</button>
-        <button
-          className="hard-choice"
-          disabled={disabled}
-          aria-pressed={effort === 100}
-          onClick={() => onEffort(100)}
-        >FISH HARD</button>
-      </div>
       <button className="primary wide fish-button" disabled={disabled || fuelTooMuch} onClick={onFish}>
         FISH
       </button>

@@ -108,6 +108,8 @@ export type TideEvent = Record<string, unknown> & {
   season?: number;
 };
 
+type EventsResponse = { events?: TideEvent[] };
+
 async function get<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`);
   if (!response.ok) throw new Error(`History unavailable (${response.status}).`);
@@ -115,7 +117,10 @@ async function get<T>(path: string): Promise<T> {
 }
 
 export const historyApi = {
-  events: (params = '') => get<TideEvent[]>(`/events${params}`),
+  events: async (params = ''): Promise<TideEvent[]> => {
+    const response = await get<EventsResponse>(`/events${params}`);
+    return Array.isArray(response.events) ? response.events : [];
+  },
   faucetClaimed: async (account: string): Promise<boolean> => {
     const events = await historyApi.events(
       `?account=${encodeURIComponent(account)}&event=ft_mint`,

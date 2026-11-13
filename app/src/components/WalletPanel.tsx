@@ -22,7 +22,9 @@ import {
   isFaucetClaimedLocally,
   loadTransactions,
   markFaucetClaimed,
+  boatStatus,
   RunAction,
+  useSeasonClock,
 } from './shared';
 
 type WalletPanelProps = {
@@ -47,6 +49,12 @@ export function WalletPanel({
 }: WalletPanelProps) {
   const account = wallet.state.account;
   const boat = account ? snapshot.boats[account] : null;
+  const clock = useSeasonClock(snapshot.sea);
+  const status = boatStatus(
+    boat,
+    clock.season,
+    Boolean(account && snapshot.indictments.some(([name]) => name === account)),
+  );
   const [qr, setQr] = useState('');
   const [copy, setCopy] = useState('');
   const [transferNote, setTransferNote] = useState('');
@@ -188,11 +196,7 @@ export function WalletPanel({
             <div>
               <dt>STATUS</dt>
               <dd>
-                {exile
-                  ? `EXILED UNTIL S${exile}`
-                  : boat?.boat.indicted_cycle !== null
-                    ? 'INDICTED'
-                    : 'FAIR'}
+                {status.label}
               </dd>
             </div>
           </dl>
@@ -312,7 +316,7 @@ export function WalletPanel({
             <div><dt>STAKE</dt><dd>{formatTide(asString(boat?.boat.stake))}</dd></div>
             <div><dt>LAST FISHED</dt><dd>{boat?.boat.last_fished ?? '—'}</dd></div>
             <div><dt>INDICTED CYCLE</dt><dd>{boat?.boat.indicted_cycle ?? '—'}</dd></div>
-            <div><dt>EXILE</dt><dd>{exile ? `UNTIL S${exile}` : '—'}</dd></div>
+            <div><dt>EXILE</dt><dd>{exile ? `EXILED UNTIL DAY ${exile}` : '—'}</dd></div>
           </dl>
           <div className="wallet-form">
             <label>

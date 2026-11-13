@@ -2,7 +2,7 @@ import type { TideSnapshot } from '../near/types';
 import { asString, boatHasStake } from '../near/types';
 import { CONTRACT } from '../config';
 import { formatTide } from '../lib/format';
-import { shortName } from './shared';
+import { boatStatus, shortName } from './shared';
 
 export function FleetTab({ snapshot, account }: { snapshot: TideSnapshot; account?: string }) {
   const boats = Object.entries(snapshot.boats).filter(
@@ -20,11 +20,8 @@ export function FleetTab({ snapshot, account }: { snapshot: TideSnapshot; accoun
             </div>
             <strong>{formatTide(asString(boat.boat.stake))}</strong>
             <span>
-              {boat.boat.indicted_cycle !== null
-                ? 'INDICTED'
-                : boat.exiled_until
-                  ? `EXILED UNTIL S${boat.exiled_until}`
-                  : 'FAIR'}
+              {boatStatus(boat, snapshot.sea?.season ?? 0,
+                snapshot.indictments.some(([item]) => item === name)).label}
             </span>
           </article>
         ) : null,

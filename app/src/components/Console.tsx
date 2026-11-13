@@ -391,11 +391,11 @@ function FishingStep({
     : sea && sea.seasons_behind > 40
       ? 'SETTLE THE SEA FIRST'
       : exiledUntil
-        ? `EXILED UNTIL S${exiledUntil}`
-        : boat.boat.last_fished === sea?.season
-          ? 'ALREADY FISHED THIS SEASON'
+        ? `EXILED UNTIL DAY ${exiledUntil}`
+            : boat.boat.last_fished === sea?.season
+          ? 'FISHED TODAY'
           : boat.boat.stake_season === sea?.season
-            ? 'BUILT THIS SEASON'
+            ? 'RIGGING'
             : '';
   const canFish = boat.can_fish_now && !reason;
   const fuel = (unitsToNumber(asString(boat.full_effort_fuel), TIDE_DECIMALS) * effort) / 100;
@@ -459,7 +459,7 @@ function FishingStep({
         <>
           <h2>{reason || 'NEXT SEASON'}</h2>
           <p className="console-copy">
-            {reason === 'ALREADY FISHED THIS SEASON'
+            {reason === 'FISHED TODAY'
               ? 'Your catch is in the water. Come back next season.'
               : 'The boat is waiting for its first season.'}
           </p>

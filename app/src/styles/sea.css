@@ -31,6 +31,13 @@
   gap: 7px;
 }
 
+.sea-ready-cta {
+  display: block;
+  margin: 0 16px 12px;
+  text-align: center;
+  text-decoration: none;
+}
+
 .sea-stale {
   padding: 4px 6px;
   color: var(--danger);

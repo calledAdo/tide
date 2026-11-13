@@ -86,6 +86,35 @@ export function boatCanFishAtSeason(boat: BoatView | null | undefined, season: n
   );
 }
 
+export type BoatStatusKey = 'IDLE' | 'READY' | 'FISHED TODAY' | 'RIGGING' | 'INDICTED' | 'EXILED';
+
+export type BoatStatus = {
+  key: BoatStatusKey;
+  label: string;
+  tooltip?: string;
+};
+
+export function boatStatus(
+  boat: BoatView | null | undefined,
+  season: number,
+  indicted = false,
+  indictmentRatio = '0.0',
+  exiledUntil?: number | null,
+): BoatStatus {
+  if (!boat || Number(asString(boat.boat.stake)) <= 0) return { key: 'IDLE', label: 'IDLE' };
+  const exile = exiledUntil ?? boat.exiled_until;
+  if (exile && exile > season) {
+    return { key: 'EXILED', label: `EXILED UNTIL DAY ${exile}` };
+  }
+  if (indicted) return { key: 'INDICTED', label: `INDICTED ${indictmentRatio}x` };
+  if (boat.boat.stake_season === season) return { key: 'RIGGING', label: 'RIGGING' };
+  if (boat.boat.last_fished === season) return { key: 'FISHED TODAY', label: 'FISHED TODAY' };
+  if (boat.can_fish_now) {
+    return { key: 'READY', label: 'READY', tooltip: 'can fish today, has not yet' };
+  }
+  return { key: 'IDLE', label: 'IDLE' };
+}
+
 export function seaPhase(sea: SeaView | null): SeaPhase {
   if (sea?.phase) return sea.phase;
   return sea?.dead ? 'Wrecked' : 'Fishing';

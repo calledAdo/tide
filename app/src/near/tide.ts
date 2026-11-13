@@ -13,6 +13,7 @@ import type {
 } from './types';
 import { asString, boatHasHistory } from './types';
 import { readBotAccounts } from './bots';
+import { historyApi } from './history';
 
 const emptySnapshot: TideSnapshot = {
   sea: null,
@@ -235,6 +236,18 @@ export class TideClient {
     return results;
   }
 
+  private async indexerAccounts(): Promise<string[]> {
+    const [stakeEvents, leaderboard] = await Promise.all([
+      historyApi.events('?event=boat_staked&limit=200').catch(() => []),
+      historyApi.leaderboard('catch').catch(() => []),
+    ]);
+    const eventAccounts = stakeEvents.flatMap((event) => {
+      const account = event.data?.account ?? event.data?.owner_id ?? event.account;
+      return typeof account === 'string' ? [account] : [];
+    });
+    return [...eventAccounts, ...leaderboard.map((row) => row.account)];
+  }
+
   private updateStale(failed: boolean): boolean {
     this.failedRefreshes = failed ? this.failedRefreshes + 1 : 0;
     return this.failedRefreshes >= 2;
@@ -353,6 +366,8 @@ export class TideClient {
       const assembly = await this.view<AssemblyView>('get_assembly');
       const botAccounts = await readBotAccounts();
       this.rememberKnown([...botAccounts]);
+      const indexedAccounts = await this.indexerAccounts();
+      this.rememberKnown(indexedAccounts);
       const exiles = await this.view<Exile[]>('get_exiles');
       const cycle = Math.floor(sea.season / 3);
       const [indictments, previousIndictments] = await Promise.all([
@@ -367,7 +382,8 @@ export class TideClient {
         ...(assembly.last_result?.exiled ?? []),
       ];
       this.rememberKnown(discovered);
-      const historicalAccounts = new Set(discovered);
+      const historicalAccounts = new Set([...discovered, ...indexedAccounts]);
+      if (this.account) this.rememberKnown([this.account]);
       let failed = false;
       const boats = { ...this.snapshot.boats };
       let playerBalance = this.snapshot.playerBalance;
@@ -400,7 +416,9 @@ export class TideClient {
       const currentKnown = new Set<string>();
       [...this.known].forEach((account) => {
         const boat = boats[account];
-        if (account !== CONTRACT && (historicalAccounts.has(account) || boatHasHistory(boat))) {
+        if (account !== CONTRACT && (
+          account === this.account || historicalAccounts.has(account) || boatHasHistory(boat)
+        )) {
           currentKnown.add(account);
         } else {
           delete boats[account];

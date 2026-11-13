@@ -4,7 +4,7 @@ import type { SeaView, TideSnapshot } from '../near/types';
 import { asString, boatHasStake } from '../near/types';
 import { CONTRACT } from '../config';
 import { compactNumber } from '../lib/format';
-import { seaPhase, shortName } from './shared';
+import { boatCanFishAtSeason, boatStatus, seaPhase, shortName, useSeasonClock } from './shared';
 import { readBotAccounts } from '../near/bots';
 
 type Props = {
@@ -112,6 +112,10 @@ export function FishSea({ sea, snapshot, account, onSelect }: Props) {
     },
   ], gaugeHeight || 250);
   const phase = seaPhase(sea);
+  const clock = useSeasonClock(sea);
+  const ownBoat = account ? snapshot.boats[account] : null;
+  const ready = Boolean(account && sea && phase === 'Fishing' && sea.seasons_behind <= 40
+    && ownBoat?.can_fish_now && boatCanFishAtSeason(ownBoat, clock.season));
   const activeExiles = [...exiled.entries()].filter(([, until]) => until > (sea?.season ?? 0));
   const visibleBoats = boats.slice(0, 18);
   return (
@@ -125,6 +129,11 @@ export function FishSea({ sea, snapshot, account, onSelect }: Props) {
           {snapshot.stale && <span className="sea-stale">STALE</span>}
         </div>
       </div>
+      {ready && (
+        <a className="primary sea-ready-cta" href="#/boat">
+          YOUR BOAT IS READY — TAKE IT OUT
+        </a>
+      )}
       <div className="sea-visual">
         <svg viewBox="0 0 820 360" role="img" aria-label="The live shared sea with rival boats">
           <path className="wave wave-one" d="M0 48 Q80 30 160 48 T320 48 T480 48 T640 48 T820 48" />
@@ -154,6 +163,16 @@ export function FishSea({ sea, snapshot, account, onSelect }: Props) {
             const isYou = name === account;
             const isBot = bots.has(name);
             const catching = boat.boat.last_fished === sea?.season;
+            const indictmentOverage = snapshot.indictments.find(([item]) => item === name)?.[1];
+            const fairShare = Number(asString(boat.fair_share));
+            const status = boatStatus(
+              boat,
+              sea?.season ?? 0,
+              indicted,
+              fairShare > 0 && indictmentOverage !== undefined
+                ? (1 + Number(asString(indictmentOverage)) / fairShare).toFixed(1)
+                : '0.0',
+            );
             const x = visibleBoats.length === 1
               ? 35
               : 24 + (index / (visibleBoats.length - 1)) * 700;
@@ -174,6 +193,10 @@ export function FishSea({ sea, snapshot, account, onSelect }: Props) {
                   + 'like any other account'
                 : `Inspect ${shortName(name)}`}</title>
               <text x="0" y="-10">{shortName(name)}{isBot ? ' · BOT' : ''}</text>
+              <text className="boat-status" x="0" y="22">
+                {status.tooltip && <title>{status.tooltip}</title>}
+                {status.label}
+              </text>
               <path d={kind === 'factory'
                 ? 'M0 0h58l-8 14H8z'
                 : kind === 'trawler' ? 'M0 1h45l-7 12H7z' : 'M0 2h31l-6 10H5z'} />

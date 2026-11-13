@@ -41,11 +41,11 @@ export function SeasonTimeline({ sea, assembly }: Props) {
               ? 'RECOVERING'
               : active && assemblyDay
             ? stage === 'shards'
-              ? `FISHING · NAMING ${seconds(countdown)}`
+              ? `OPEN · NAMING ${seconds(countdown)}`
               : stage === 'hold'
-                ? `FISHING · VOTE ${seconds(countdown)}`
-                : `FISHING · VOTE OPENS ${seconds(countdown)}`
-              : active ? `FISHING · ${seconds(countdown)}` : 'FISH';
+                ? `OPEN · VOTE ${seconds(countdown)}`
+                : `OPEN · VOTE OPENS ${seconds(countdown)}`
+              : active ? `OPEN · ${seconds(countdown)}` : 'FISH';
           const description = assemblyDay
             ? 'You can still fish. The assembly also meets: first half to agree to hold one, '
               + 'second half to name who to banish.'

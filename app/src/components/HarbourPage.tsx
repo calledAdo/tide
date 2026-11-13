@@ -4,16 +4,17 @@ import { asString, boatHasHistory } from '../near/types';
 import { CONTRACT } from '../config';
 import { historyApi, type LeaderboardRow } from '../near/history';
 import { formatTide, unitsToNumber, TIDE_DECIMALS } from '../lib/format';
-import { shortName } from './shared';
+import { boatStatus, shortName } from './shared';
 import { CaptainCard } from './CaptainCard';
 import { readBotAccounts } from '../near/bots';
 
 type Props = { snapshot: TideSnapshot; account?: string };
-type Filter = 'ALL' | 'FISHING' | 'INDICTED' | 'EXILED';
+type Filter = 'ALL' | 'READY' | 'INDICTED' | 'EXILED';
 type Status = Filter
+  | 'LOADING'
   | 'IDLE'
   | 'FISHED TODAY'
-  | `INDICTED ${string}×`
+  | `INDICTED ${string}x`
   | `EXILED UNTIL DAY ${number}`;
 
 export function HarbourPage({ snapshot, account }: Props) {
@@ -39,6 +40,7 @@ export function HarbourPage({ snapshot, account }: Props) {
   const rows = [...names].map((name) => {
     const boat = snapshot.boats[name];
     const data = leaderboard.find((row) => row.account === name);
+    const boatLoaded = Object.prototype.hasOwnProperty.call(snapshot.boats, name);
     const exile = snapshot.exiles.find(([item]) => item === name)?.[1] ?? boat?.exiled_until ?? null;
     const currentIndictment = snapshot.indictments.some(([item]) => item === name);
     const stake = Number(asString(boat?.boat.stake));
@@ -47,25 +49,24 @@ export function HarbourPage({ snapshot, account }: Props) {
     const ratio = fairShare > 0 && overage !== undefined
       ? (1 + Number(asString(overage)) / fairShare).toFixed(1)
       : '0.0';
-    const status: Status = stake <= 0
-      ? 'IDLE'
-      : exile && exile > (snapshot.sea?.season ?? 0)
-        ? `EXILED UNTIL DAY ${exile}`
-      : currentIndictment
-        ? `INDICTED ${ratio}×`
-        : boat?.boat.last_fished === snapshot.sea?.season
-          ? 'FISHED TODAY'
-        : boat?.can_fish_now
-          ? 'FISHING'
-          : 'FISHED TODAY';
+    const status = boatLoaded
+      ? boatStatus(
+        boat,
+        snapshot.sea?.season ?? 0,
+        currentIndictment,
+        ratio,
+        exile,
+      ).label as Status
+      : 'LOADING';
     const statusKey: Filter = status.startsWith('EXILED')
       ? 'EXILED'
       : status.startsWith('INDICTED')
         ? 'INDICTED'
-        : status === 'FISHING' ? 'FISHING' : 'ALL';
+        : status === 'READY' ? 'READY' : 'ALL';
     return {
       name,
       boat,
+      boatLoaded,
       data,
       exile,
       status,
@@ -93,7 +94,7 @@ export function HarbourPage({ snapshot, account }: Props) {
       </div>
       <div className="table-tools">
         <div className="segmented">
-          {(['ALL', 'FISHING', 'INDICTED', 'EXILED'] as Filter[]).map((item) => (
+          {(['ALL', 'READY', 'INDICTED', 'EXILED'] as Filter[]).map((item) => (
             <button
               key={item}
               aria-pressed={filter === item}
@@ -143,12 +144,15 @@ export function HarbourPage({ snapshot, account }: Props) {
                 >BOT</em>
               )}
             </span>
-            <span>{formatTide(asString(row.boat?.boat.stake))}</span>
+            <span>{row.boatLoaded ? formatTide(asString(row.boat?.boat.stake)) : '—'}</span>
             <span>{row.data?.catch !== undefined ? formatTide(row.data.catch) : '—'}</span>
             <span>{row.data?.net !== undefined ? formatTide(row.data.net) : '—'}</span>
             <span>{row.data?.trips ?? '—'}</span>
-            <span className={row.statusKey === 'EXILED'
-              ? 'danger-text' : row.statusKey === 'INDICTED' ? 'amber-text' : ''}>
+            <span
+              className={row.statusKey === 'EXILED'
+                ? 'danger-text' : row.statusKey === 'INDICTED' ? 'amber-text' : ''}
+              title={row.status === 'READY' ? 'can fish today, has not yet' : undefined}
+            >
               {row.status}
             </span>
           </button>
