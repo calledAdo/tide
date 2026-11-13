@@ -198,7 +198,7 @@ test('honest captains vote yes only when the cycle has indictments', async () =>
     const bots = createBots({
       config: config(dataDir),
       view: async (method) => {
-        if (method === 'get_sea') return { season: 2, seasons_behind: 0 };
+        if (method === 'get_sea') return { season: 2, season_len_sec: 60, seconds_left_in_season: 60, seasons_behind: 0 };
         if (method === 'get_boat') return boat();
         if (method === 'get_assembly') return { cycle: 0, stage: 'hold', eligible: 7, hold_yes: 0 };
         if (method === 'get_indictments') return indicted;
@@ -228,7 +228,7 @@ test('shards require a passed hold and contain at most three indicted boats', as
   const bots = createBots({
     config: config(dataDir),
     view: async (method) => {
-      if (method === 'get_sea') return { season: 2, seasons_behind: 0 };
+      if (method === 'get_sea') return { season: 2, season_len_sec: 60, seconds_left_in_season: 60, seasons_behind: 0 };
       if (method === 'get_boat') return boat();
       if (method === 'get_assembly') return { cycle: 0, stage: 'shards', eligible: 7, hold_yes: holdPassed ? 4 : 3 };
       if (method === 'get_indictments') return indicted;
@@ -243,6 +243,101 @@ test('shards require a passed hold and contain at most three indicted boats', as
   assert.equal(shards.length, 5);
   assert.deepEqual(shards[0].args.names, ['two.testnet', 'three.testnet', 'one.testnet']);
   assert.equal(shards.every(({ args }) => args.names.every((name) => indicted.some(([account]) => account === name))), true);
+});
+
+test('governance sends at the safety boundary and skips below it', async () => {
+  const runHold = async (secondsLeft) => {
+    const dataDir = await directory();
+    const sends = [];
+    const debug = [];
+    const bots = createBots({
+      config: config(dataDir),
+      view: async (method) => {
+        if (method === 'get_sea') return { season: 2, season_len_sec: 60, seconds_left_in_season: secondsLeft, seasons_behind: 0 };
+        if (method === 'get_boat') return boat();
+        if (method === 'get_assembly') return { cycle: 0, stage: 'hold', eligible: 7, hold_yes: 0 };
+        if (method === 'get_indictments') return [['one.testnet', '1']];
+        throw new Error(`unexpected view ${method}`);
+      },
+      send: async (account, method) => { sends.push({ account, method }); return 'tx'; },
+      logger: { debug: (message) => debug.push(message) },
+    });
+    await bots.run();
+    return { sends, debug };
+  };
+
+  const enough = await runHold(38);
+  assert.equal(enough.sends.length, BOT_DEFINITIONS.length);
+  assert.equal(enough.debug.length, 0);
+
+  const notEnough = await runHold(37);
+  assert.equal(notEnough.sends.length, 0);
+  assert.equal(notEnough.debug.length, BOT_DEFINITIONS.length);
+});
+
+test('shard timing uses the end of the season as its boundary', async () => {
+  const runShards = async (secondsLeft) => {
+    const dataDir = await directory();
+    const sends = [];
+    const debug = [];
+    const bots = createBots({
+      config: config(dataDir),
+      view: async (method) => {
+        if (method === 'get_sea') return { season: 2, season_len_sec: 60, seconds_left_in_season: secondsLeft, seasons_behind: 0 };
+        if (method === 'get_boat') return boat();
+        if (method === 'get_assembly') return { cycle: 0, stage: 'shards', eligible: 7, hold_yes: 4 };
+        if (method === 'get_indictments') return [['one.testnet', '1']];
+        throw new Error(`unexpected view ${method}`);
+      },
+      send: async (account, method) => { sends.push({ account, method }); return 'tx'; },
+      logger: { debug: (message) => debug.push(message) },
+    });
+    await bots.run();
+    return { sends, debug };
+  };
+
+  const enough = await runShards(8);
+  assert.equal(enough.sends.length, BOT_DEFINITIONS.length - 1);
+  assert.equal(enough.debug.length, 0);
+
+  const notEnough = await runShards(7);
+  assert.equal(notEnough.sends.length, 0);
+  assert.equal(notEnough.debug.length, BOT_DEFINITIONS.length - 1);
+});
+
+test('expected assembly half panics are debug outcomes, not errors', async () => {
+  const runExpectedPanic = async (stage, panic) => {
+    const dataDir = await directory();
+    const errors = [];
+    const debug = [];
+    const bots = createBots({
+      config: config(dataDir),
+      view: async (method) => {
+        if (method === 'get_sea') return { season: 2, season_len_sec: 60, seconds_left_in_season: stage === 'hold' ? 60 : 8, seasons_behind: 0 };
+        if (method === 'get_boat') return boat();
+        if (method === 'get_assembly') return { cycle: 0, stage, eligible: 7, hold_yes: 4 };
+        if (method === 'get_indictments') return [['one.testnet', '1']];
+        throw new Error(`unexpected view ${method}`);
+      },
+      send: async () => { throw new Error(`Smart contract panicked: ${panic}`); },
+      logger: {
+        error: (message) => errors.push(message),
+        debug: (message) => debug.push(message),
+      },
+    });
+    await bots.run();
+    return { errors, debug, status: bots.status() };
+  };
+
+  const firstHalf = await runExpectedPanic('hold', 'not the first half of an assembly season');
+  assert.equal(firstHalf.errors.length, 0);
+  assert.equal(firstHalf.debug.length, BOT_DEFINITIONS.length);
+  assert.equal(firstHalf.status.accounts.every(({ lastError }) => lastError === null), true);
+
+  const secondHalf = await runExpectedPanic('shards', 'not the second half of an assembly season');
+  assert.equal(secondHalf.errors.length, 0);
+  assert.equal(secondHalf.debug.length, BOT_DEFINITIONS.length - 1);
+  assert.equal(secondHalf.status.accounts.every(({ lastError }) => lastError === null), true);
 });
 
 test('restart does not repeat a successful action', async () => {

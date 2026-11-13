@@ -15,6 +15,7 @@ const BOT_DEFINITIONS = BOT_ACCOUNTS.map(([account, role]) => ({ account, role }
 const BOT_GAS = 30n * 1_000_000_000_000n;
 const BOT_STAKE_AMOUNT = 9_900_000n * 10n ** 18n;
 const DEFAULT_CAPACITY = 1_000_000;
+const DEFAULT_STAGE_SAFETY_MS = 8_000;
 const TIDE_DECIMALS = 10n ** 18n;
 const DEFAULT_RESEED_BOT_SHARE = 150_000n * TIDE_DECIMALS;
 const SUSTAINABLE_FRACTION = 0.689;
@@ -116,6 +117,17 @@ function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function isExpectedAssemblyPanic(error) {
+  return /not the (?:first|second) half/i.test(errorMessage(error));
+}
+
+function stageSecondsLeft(sea, stage) {
+  const secondsLeft = Number(sea?.seconds_left_in_season);
+  const seasonLength = Number(sea?.season_len_sec);
+  if (!Number.isFinite(secondsLeft) || !Number.isFinite(seasonLength) || seasonLength <= 0) return null;
+  return stage === 'hold' ? secondsLeft - seasonLength / 2 : secondsLeft;
+}
+
 function defaultState() {
   return { actions: {}, accounts: {}, lastRunAt: null, floorActive: false };
 }
@@ -140,6 +152,7 @@ export function createBots({
   let timer;
   let keyCheckLogged = false;
   let enabled = config?.botsEnabled ?? true;
+  const stageSafetyMs = Math.max(0, numberValue(config?.stageSafetyMs, DEFAULT_STAGE_SAFETY_MS));
   const strategy = {
     stock: null,
     floorActive: state.floorActive,
@@ -243,6 +256,13 @@ export function createBots({
       await persist();
       return true;
     } catch (error) {
+      if (isExpectedAssemblyPanic(error)) {
+        const status = statusByAccount.get(definition.account);
+        status.lastError = null;
+        state.accounts[definition.account] = status;
+        logger.debug?.(`tide bot expected account=${definition.account} action=${actionName}: ${errorMessage(error)}`);
+        return false;
+      }
       await saveError(definition.account, error);
       logger.error?.(`tide bot error account=${definition.account} action=${actionName}: ${errorMessage(error)}`);
       return false;
@@ -307,16 +327,28 @@ export function createBots({
     if (season % 3 !== 2 || (boat.exiled_until !== null && numberValue(boat.exiled_until) > season)) return;
     const assembly = await callView('get_assembly');
     const cycle = numberValue(assembly?.cycle, Math.floor(season / 3));
-    const indictments = await callView('get_indictments', { cycle });
-    if (!Array.isArray(indictments)) return;
 
     if (assembly?.stage === 'hold') {
+      const secondsLeft = stageSecondsLeft(sea, 'hold');
+      if (secondsLeft === null || secondsLeft * 1000 < stageSafetyMs) {
+        logger.debug?.(`tide bot skip account=${definition.account} action=vote: ${secondsLeft === null ? 'assembly timing unavailable' : `${secondsLeft * 1000}ms left in hold`}`);
+        return;
+      }
+      const indictments = await callView('get_indictments', { cycle });
+      if (!Array.isArray(indictments)) return;
       const yes = definition.role !== 'overfisher' && indictments.length > 0;
       await act(definition, season, strategy.generation, 'vote', 'vote_hold', { yes }, () => ({ lastVoteCycle: cycle }));
       return;
     }
 
     if (assembly?.stage !== 'shards' || definition.role === 'overfisher') return;
+    const secondsLeft = stageSecondsLeft(sea, 'shards');
+    if (secondsLeft === null || secondsLeft * 1000 < stageSafetyMs) {
+      logger.debug?.(`tide bot skip account=${definition.account} action=shard: ${secondsLeft === null ? 'assembly timing unavailable' : `${secondsLeft * 1000}ms left in shards`}`);
+      return;
+    }
+    const indictments = await callView('get_indictments', { cycle });
+    if (!Array.isArray(indictments)) return;
     const holdPassed = numberValue(assembly.hold_yes) * 2 > numberValue(assembly.eligible);
     if (!holdPassed) return;
     const names = indictments
