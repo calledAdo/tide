@@ -56,6 +56,16 @@ nav a.active {
   color: var(--ink);
 }
 
+.nav-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 5px;
+  border-radius: 50%;
+  background: var(--signal);
+  vertical-align: middle;
+}
+
 .topbar-actions {
   display: flex;
   margin-left: auto;

@@ -1,6 +1,7 @@
 import { formatAccountAddress, type WalletSnapshot } from '../near/wallet';
 import type { TideSnapshot } from '../near/types';
 import { compactNumber, unitsToNumber, TIDE_DECIMALS } from '../lib/format';
+import { assemblyStage } from './shared';
 
 type Props = {
   snapshot: TideSnapshot;
@@ -12,6 +13,10 @@ type Props = {
 export function TopBar({ snapshot, wallet, onConnect, onOpenPanel }: Props) {
   const href = location.hash || '#/';
   const nav = [['#/', 'SEA'], ['#/harbour', 'HARBOUR'], ['#/agora', 'AGORA'], ['#/boat', 'YOUR BOAT']];
+  const boat = wallet.account ? snapshot.boats[wallet.account] : null;
+  const needsBoat = Boolean(
+    wallet.account && (boat?.can_fish_now || assemblyStage(snapshot.sea, snapshot.assembly)),
+  );
   return (
     <header className="topbar">
       <a className="brand" href="#/">
@@ -23,7 +28,12 @@ export function TopBar({ snapshot, wallet, onConnect, onOpenPanel }: Props) {
             <span className="nav-icon">
               {label === 'SEA' ? '◒' : label === 'HARBOUR' ? '▤' : label === 'AGORA' ? '⚖' : '◈'}
             </span>
-            <span>{label}</span>
+            <span>
+              {label}
+              {label === 'YOUR BOAT' && needsBoat && (
+                <i className="nav-dot" aria-label="Action available" />
+              )}
+            </span>
           </a>
         ))}
       </nav>

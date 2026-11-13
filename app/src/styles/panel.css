@@ -235,6 +235,10 @@
   color: var(--danger);
 }
 
+.toast.info {
+  border-left: 6px solid var(--signal);
+}
+
 @media (max-width: 760px) {
   .wallet-panel {
     width: 100vw;

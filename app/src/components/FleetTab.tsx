@@ -1,11 +1,12 @@
 import type { TideSnapshot } from '../near/types';
-import { asString } from '../near/types';
+import { asString, boatHasStake } from '../near/types';
+import { CONTRACT } from '../config';
 import { formatTide } from '../lib/format';
 import { shortName } from './shared';
 
 export function FleetTab({ snapshot, account }: { snapshot: TideSnapshot; account?: string }) {
   const boats = Object.entries(snapshot.boats).filter(
-    ([, boat]) => boat && Number(asString(boat.boat.stake)) > 0,
+    ([name, boat]) => name !== CONTRACT && boatHasStake(boat),
   );
 
   return (

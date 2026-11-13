@@ -6,11 +6,17 @@ This Node 22 service provides two small operational functions for the TIDE testn
 - The keeper periodically views `get_sea()` and sends `tick({})` when seasons are more than `KEEPER_MIN_BEHIND` behind, up to five ticks per run. The default threshold is 30.
 - The event indexer backfills and follows TIDE transactions through FastNEAR, persisting `events.jsonl` and processed transaction hashes in `DATA_DIR`.
 
+## Bot captains
+
+The six disclosed demo accounts run as ordinary bot captains: `ana`, `ben`, `cy`, and `eve` fish their fair share, `dee` fishes 80% of its fair share, and `greedy` fishes at full effort and can be indicted and exiled. They have no contract privilege; each uses a function-call key restricted to `stake`, `unstake`, `fish`, `vote_hold`, `write_shard`, and `tick`, with a 0.25 NEAR allowance and no ability to transfer funds. The service reads those keys from `BOT_KEYS_FILE` and never logs them. Set `BOTS_ENABLED=false` to disable the captains.
+
 The service listens on `127.0.0.1:3101` by default and is intended to sit behind Caddy. It uses only `near-api-js` and Node built-ins. The sponsor private key is used only in memory and is never logged.
 
 ## Endpoints
 
-`GET /health` returns the testnet, TIDE contract, sponsor, sponsor balance, seasons behind, `keeperMinBehind`, keeper state, and today’s onboarding count.
+`GET /health` returns the testnet, TIDE contract, sponsor, sponsor balance, seasons behind, `keeperMinBehind`, keeper state, bot summary, today’s onboarding count, and the indexer gap. `GET /indexer/status` also reports processed hashes, the FastNEAR transaction count, gap, and the last full sweep time.
+
+`GET /bots/status` returns each bot’s role, latest fishing season and transaction, latest vote and shard cycles, exile season, and last error.
 
 `POST /testnet/onboard` accepts JSON such as `{"accountId":"0x..."}`. The account must match `0x` plus 40 lowercase hexadecimal characters. A successful response contains the funded account, target NEAR amount, registration status, and transaction hashes. Requests are limited to one funding per account per 24 hours, five accounts per client IP per 24 hours, and the configured daily total. The limiter is persisted in `DATA_DIR`.
 
@@ -43,9 +49,13 @@ FRONTEND_ORIGINS
 | `KEEPER_INTERVAL_MS` | `30000` |
 | `KEEPER_MIN_BEHIND` | `30` |
 | `KEEPER_ENABLED` | `true` |
+| `BOTS_ENABLED` | `true` |
+| `BOTS_INTERVAL_MS` | `20000` |
+| `BOT_KEYS_FILE` | `/etc/tide/bot-keys.json` |
 | `INDEXER_ENABLED` | `true` |
 | `FASTNEAR_TX_URL` | `https://tx.test.fastnear.com` |
 | `INDEXER_POLL_MS` | `10000` |
+| `INDEXER_SWEEP_MS` | `300000` |
 
 ## Local checks
 

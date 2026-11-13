@@ -15,7 +15,7 @@ export function markFaucetClaimed(account: string): void {
 
 export type Toast = {
   id: number;
-  kind: 'pending' | 'success' | 'error';
+  kind: 'pending' | 'success' | 'error' | 'info';
   text: string;
   result?: TransactionResult;
 };
@@ -32,7 +32,8 @@ export function shortName(account: string): string {
 }
 
 export function seconds(value: number): string {
-  return `0:${Math.max(0, value).toString().padStart(2, '0')}`;
+  const total = Math.max(0, Math.floor(value));
+  return `${Math.floor(total / 60)}:${(total % 60).toString().padStart(2, '0')}`;
 }
 
 export function assemblyStage(

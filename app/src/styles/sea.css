@@ -72,6 +72,25 @@
   stroke-width: 2;
 }
 
+.wave {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.wave-one { animation: wave-drift 8s ease-in-out infinite alternate; }
+.wave-two { opacity: .65; animation: wave-drift 11s ease-in-out -3s infinite alternate-reverse; }
+.wave-three { opacity: .35; animation: wave-drift 15s ease-in-out -6s infinite alternate; }
+.caustic {
+  fill: none;
+  stroke: #effcff;
+  stroke-width: 2;
+  opacity: .18;
+  animation: caustic-shimmer 7s linear infinite;
+}
+.caustic-two { animation-delay: -3s; animation-duration: 10s; }
+
 .water-band {
   fill: var(--water-deep);
   opacity: 0.76;
@@ -80,8 +99,15 @@
 .fish-glyph {
   fill: #effcff;
   opacity: 0.85;
+  transform-box: fill-box;
+  transform-origin: center;
   animation: fish-drift 8s ease-in-out infinite alternate;
 }
+
+.fish-body { fill: #effcff; }
+.fish-swim-0 { animation: fish-drift-turn 9s linear infinite; scale: .72; }
+.fish-swim-1 { animation: fish-drift-turn 13s linear -4s infinite; scale: 1.2; }
+.fish-swim-2 { animation: fish-drift-turn 17s linear -9s infinite; scale: .9; }
 
 .fish-glyph path {
   fill: #effcff;
@@ -236,13 +262,26 @@
 }
 
 @keyframes fish-drift {
-  from {
-    transform: translateX(-4px);
-  }
+  from { transform: translateX(-35px); }
+  to { transform: translateX(35px); }
+}
 
-  to {
-    transform: translateX(10px);
-  }
+@keyframes fish-drift-turn {
+  0% { transform: translateX(-35px) scaleX(1); }
+  48% { transform: translateX(35px) scaleX(1); }
+  52% { transform: translateX(35px) scaleX(-1); }
+  100% { transform: translateX(-35px) scaleX(-1); }
+}
+
+@keyframes wave-drift {
+  from { translate: -18px 0; }
+  to { translate: 18px 2px; }
+}
+
+@keyframes caustic-shimmer {
+  from { opacity: .08; translate: -30px 0; }
+  50% { opacity: .28; }
+  to { opacity: .08; translate: 30px 0; }
 }
 
 @keyframes line-pulse {
@@ -253,6 +292,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .fish-glyph,
+  .wave,
+  .caustic,
+  .boat-glyph,
   .catch-line,
   .progress-pulse {
     animation: none;

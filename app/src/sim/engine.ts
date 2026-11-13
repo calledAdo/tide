@@ -35,6 +35,9 @@ export type SimModule = {
     MSY_STOCK: number;
     SEASONS: number;
   };
+  growth: (stock: number) => number;
+  catchAtEffort: (stock: number, stake: number, totalStake: number, effort: number) => number;
+  fairCatch: (stake: number, totalStake: number) => number;
   create: (id: string) => SimEngine;
   runToEnd: (id: string) => unknown;
 };

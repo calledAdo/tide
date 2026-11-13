@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { CONTRACT, EXPLORER } from './config';
 import { TideClient } from './near/tide';
 import { TideWallet, type TransactionResult, type WalletSnapshot } from './near/wallet';
-import { historyApi } from './near/history';
 import type { TideSnapshot } from './near/types';
 import { HowPage } from './components/HowPage';
 import { PlayPage } from './routes/SeaRoute';
@@ -12,7 +11,7 @@ import { BoatPage } from './routes/BoatRoute';
 import { ReplayPage } from './components/ReplayPage';
 import { TopBar } from './components/TopBar';
 import { SeasonTimeline } from './components/SeasonTimeline';
-import { NotificationStrip } from './components/NotificationStrip';
+import { AssemblyBar } from './components/AssemblyBar';
 import { Toasts } from './components/Toasts';
 import { WalletPanel } from './components/WalletPanel';
 import {
@@ -73,7 +72,6 @@ export default function App() {
   const [snapshot, setSnapshot] = useState<TideSnapshot>(client.state);
   const [panel, setPanel] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const previous = useRef<TideSnapshot | null>(null);
   useEffect(() => wallet.subscribe(setWalletState), [wallet]);
   useEffect(() => client.subscribe(setSnapshot), [client]);
   useEffect(() => client.start(), [client]);
@@ -84,40 +82,6 @@ export default function App() {
     });
   }, [wallet]);
   useEffect(() => { setPanel(false); }, [route]);
-  useEffect(() => {
-    const old = previous.current;
-    if (old && snapshot.sea && snapshot.sea.assembly && !old.sea?.assembly) {
-      setToasts((items) => [...items, { id: Date.now(), kind: 'pending', text: 'ASSEMBLY IS STARTING' }]);
-    }
-    const account = walletState.account;
-    const oldBoat = account ? old?.boats[account] : null;
-    const newBoat = account ? snapshot.boats[account] : null;
-    if (oldBoat && newBoat && oldBoat.boat.indicted_cycle === null && newBoat.boat.indicted_cycle !== null) {
-      setToasts((items) => [...items, { id: Date.now() + 1, kind: 'error', text: 'YOU WERE INDICTED' }]);
-    }
-    if (oldBoat && newBoat && !oldBoat.exiled_until && newBoat.exiled_until) {
-      setToasts((items) => [...items, {
-        id: Date.now() + 2,
-        kind: 'error',
-        text: `YOU WERE EXILED UNTIL DAY ${newBoat.exiled_until}`,
-      }]);
-    }
-    previous.current = snapshot;
-  }, [snapshot, walletState.account]);
-  useEffect(() => {
-    let live = true;
-    const readEvents = () => void historyApi.events('?limit=8').then((events) => {
-      if (!live || !events.length) return;
-      const recent = events.slice(-3).flatMap((event, index) => {
-        const label = String(event.event ?? event.type ?? 'EVENT').replace(/_/g, ' ').toUpperCase();
-        return [{ id: Date.now() + index, kind: 'success' as const, text: label }];
-      });
-      setToasts((items) => [...items, ...recent].slice(-8));
-    }).catch(() => undefined);
-    readEvents();
-    const timer = window.setInterval(readEvents, 30_000);
-    return () => { live = false; window.clearInterval(timer); };
-  }, []);
   const refresh = () => void client.refresh();
   const run: RunAction = (label, task) => {
     const id = Date.now() + Math.random();
@@ -150,9 +114,11 @@ export default function App() {
   };
   const connect = () => void wallet.connect().catch(() => undefined);
   const disconnect = () => { void wallet.disconnect(); setPanel(false); };
+  const dismissToast = useCallback((id: number) => {
+    setToasts((items) => items.filter((item) => item.id !== id));
+  }, []);
   const content = route === 'sea'
-    ? <PlayPage wallet={walletState} walletApi={wallet} snapshot={snapshot}
-      onConnect={connect} onOpenWallet={() => setPanel(true)} run={run} onRefresh={refresh} />
+    ? <PlayPage wallet={walletState} snapshot={snapshot} />
     : route === 'harbour'
       ? <HarbourPage snapshot={snapshot} account={walletState.account} />
       : route === 'agora'
@@ -166,11 +132,10 @@ export default function App() {
     <TopBar snapshot={snapshot} wallet={walletState} onConnect={connect}
       onOpenPanel={() => setPanel(true)} />
     <SeasonTimeline sea={snapshot.sea} assembly={snapshot.assembly} />
-    <NotificationStrip items={toasts} />
+    <AssemblyBar snapshot={snapshot} />
     {content}
     {panel && <WalletPanel wallet={wallet} tideClient={client} snapshot={snapshot}
       onClose={() => setPanel(false)} onDisconnect={disconnect} run={run} />}
-    <Toasts toasts={toasts}
-      onDismiss={(id) => setToasts((items) => items.filter((item) => item.id !== id))} />
+    <Toasts toasts={toasts} onDismiss={dismissToast} />
   </>;
 }

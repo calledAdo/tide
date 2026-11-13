@@ -6,6 +6,7 @@ import { createNear } from './near.js';
 import { onboardAccount } from './onboard.js';
 import { FileRateLimiter } from './ratelimit.js';
 import { createIndexer } from './indexer.js';
+import { createBots } from './bots.js';
 
 function sendJson(response, status, body, headers = {}) {
   const payload = JSON.stringify(body);
@@ -46,7 +47,14 @@ function readBody(request) {
 
 function disabledIndexer() {
   return {
-    status: () => ({ enabled: false, source: null, txsSeen: 0, txsTotal: null, lastPollAt: null, events: 0, lastError: null }),
+    status: () => ({ enabled: false, source: null, txsSeen: 0, processedHashes: 0, txsTotal: null, gap: null, lastPollAt: null, lastSweepAt: null, events: 0, lastError: null }),
+  };
+}
+
+function disabledBots() {
+  return {
+    status: () => ({ enabled: false, accounts: [], lastRunAt: null }),
+    summary: () => 'disabled; no bot captains configured',
   };
 }
 
@@ -55,7 +63,7 @@ function queryLimit(value, fallback, maximum) {
   return Number.isSafeInteger(parsed) ? Math.max(1, Math.min(maximum, parsed)) : fallback;
 }
 
-export function createHandler({ config, near, limiter, keeper, indexer = disabledIndexer(), now = () => Date.now() }) {
+export function createHandler({ config, near, limiter, keeper, bots = disabledBots(), indexer = disabledIndexer(), now = () => Date.now() }) {
   return async (request, response) => {
     const cors = originHeaders(request, config);
     if (request.method === 'OPTIONS') {
@@ -74,6 +82,7 @@ export function createHandler({ config, near, limiter, keeper, indexer = disable
       let seasonsBehind = null;
       try { sponsorBalanceNear = yoctoToNear(await near.sponsorBalance()); } catch { /* health remains useful during RPC outage */ }
       try { seasonsBehind = Number((await near.view(config.tideContract, 'get_sea', {}))?.seasons_behind); } catch { /* health remains useful during RPC outage */ }
+      const indexerStatus = indexer.status();
       sendJson(response, 200, {
         network: 'testnet',
         contract: config.tideContract,
@@ -82,9 +91,16 @@ export function createHandler({ config, near, limiter, keeper, indexer = disable
         seasonsBehind,
         keeperMinBehind: config.keeperMinBehind,
         keeper: keeper.state,
+        bots: typeof bots.summary === 'function' ? bots.summary() : 'unknown',
         onboardedToday: await limiter.countToday(now()),
-        indexer: indexer.status(),
+        gap: indexerStatus.gap,
+        indexer: indexerStatus,
       }, cors);
+      return;
+    }
+    if (request.method === 'GET' && url.pathname === '/bots/status') {
+      const status = bots.status();
+      sendJson(response, 200, { ...status, bots: status.accounts }, { ...cors, 'cache-control': 'no-store' });
       return;
     }
     if (request.method === 'GET' && url.pathname === '/indexer/status') {
@@ -161,8 +177,9 @@ export function buildService(config = loadConfig()) {
   const near = createNear(config);
   const limiter = new FileRateLimiter(config.dataDir);
   const keeper = createKeeper({ config, near });
+  const bots = createBots({ config, near });
   const indexer = createIndexer({ config });
-  return { config, near, limiter, keeper, indexer, handler: createHandler({ config, near, limiter, keeper, indexer }) };
+  return { config, near, limiter, keeper, bots, indexer, handler: createHandler({ config, near, limiter, keeper, bots, indexer }) };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -172,5 +189,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log(`tide server listening on ${service.config.host}:${service.config.port}`);
   });
   service.keeper.start();
+  service.bots.start();
   service.indexer.start();
 }

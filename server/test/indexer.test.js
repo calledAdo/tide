@@ -73,6 +73,83 @@ test('account paging uses the lowest height and stops after a short page', async
   }
 });
 
+test('a known first hash does not hide an unknown older hash on the same page', async () => {
+  const known = { transaction_hash: 'known-hash', tx_block_height: 20, tx_block_timestamp: '20' };
+  const unknown = { transaction_hash: 'unknown-hash', tx_block_height: 10, tx_block_timestamp: '10' };
+  const dataDir = await mkdtemp(join(tmpdir(), 'tide-indexer-'));
+  try {
+    let accountCalls = 0;
+    const transactionBatches = [];
+    const indexer = createIndexer({
+      config: { dataDir, tideContract: CONTRACT },
+      fetchFn: async (url, options) => {
+        if (url.endsWith('/v0/account')) {
+          accountCalls += 1;
+          return response(accountCalls === 1
+            ? { txs_count: 1, account_txs: [known] }
+            : { txs_count: 2, account_txs: [known, unknown] });
+        }
+        transactionBatches.push(JSON.parse(options.body).tx_hashes);
+        return response({ transactions: [] });
+      },
+      sleep: async () => {},
+    });
+
+    await indexer.syncOnce();
+    await indexer.syncOnce();
+
+    assert.deepEqual(transactionBatches, [['known-hash'], ['unknown-hash']]);
+    assert.equal(indexer.status().processedHashes, 2);
+    assert.equal(indexer.status().gap, 0);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('a head shift is recovered by the next full sweep', async () => {
+  const initial = Array.from({ length: 150 }, (_, index) => ({
+    transaction_hash: `hash-${index}`,
+    tx_block_height: 150 - index,
+    tx_block_timestamp: String(150 - index),
+  }));
+  const newHead = { transaction_hash: 'new-head', tx_block_height: 151, tx_block_timestamp: '151' };
+  const missed = { transaction_hash: 'missed', tx_block_height: 0, tx_block_timestamp: '0' };
+  const dataDir = await mkdtemp(join(tmpdir(), 'tide-indexer-'));
+  let accountCalls = 0;
+  try {
+    const transactionBatches = [];
+    const indexer = createIndexer({
+      config: { dataDir, tideContract: CONTRACT, indexerSweepMs: 300_000 },
+      fetchFn: async (url, options) => {
+        if (url.endsWith('/v0/account')) {
+          accountCalls += 1;
+          if (accountCalls === 1) return response({ txs_count: 150, account_txs: initial });
+          if (accountCalls === 2) return response({ txs_count: 150, account_txs: [] });
+          if (accountCalls === 3) return response({ txs_count: 152, account_txs: [newHead, ...initial.slice(0, 149)] });
+          if (accountCalls === 4) return response({ txs_count: 152, account_txs: [initial[149]] });
+          if (accountCalls === 5) return response({ txs_count: 152, account_txs: [newHead, ...initial.slice(0, 149)] });
+          if (accountCalls === 6) return response({ txs_count: 152, account_txs: [initial[149], missed] });
+          assert.fail(`unexpected account call ${accountCalls}`);
+        }
+        transactionBatches.push(JSON.parse(options.body).tx_hashes);
+        return response({ transactions: [] });
+      },
+      sleep: async () => {},
+    });
+
+    await indexer.syncOnce();
+    await indexer.syncOnce();
+    assert.equal(indexer.status().gap, 1);
+    await indexer.syncOnce();
+
+    assert.equal(indexer.status().processedHashes, 152);
+    assert.equal(indexer.status().gap, 0);
+    assert.ok(transactionBatches.flat().includes('missed'));
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
 test('re-processing a hash is idempotent and restart resumes from indexed-txs.json', async () => {
   const account = await fixture('real-account-txs.json');
   const result = await fixture('real-transactions-fish.json');
@@ -100,6 +177,40 @@ test('re-processing a hash is idempotent and restart resumes from indexed-txs.js
     assert.equal(resumed.status().txsSeen, 1);
     assert.equal(resumed.status().events, 57);
     assert.deepEqual(JSON.parse(await readFile(join(dataDir, 'indexed-txs.json'), 'utf8')), [accountTx.transaction_hash]);
+  } finally {
+    await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('a scheduled sweep re-processes transactions without duplicating events', async () => {
+  const account = await fixture('real-account-txs.json');
+  const result = await fixture('real-transactions-fish.json');
+  const accountTx = account.account_txs.find((entry) => entry.transaction_hash === result.transactions[0].transaction.hash);
+  const dataDir = await mkdtemp(join(tmpdir(), 'tide-indexer-'));
+  const eventsPath = join(dataDir, 'events.jsonl');
+  let currentTime = 1_000_000;
+  let transactionCalls = 0;
+  try {
+    const indexer = createIndexer({
+      config: { dataDir, tideContract: CONTRACT, indexerSweepMs: 100 },
+      now: () => currentTime,
+      fetchFn: async (url) => {
+        if (url.endsWith('/v0/account')) return response({ txs_count: 1, account_txs: [accountTx] });
+        transactionCalls += 1;
+        return response(result);
+      },
+      sleep: async () => {},
+    });
+
+    await indexer.syncOnce();
+    currentTime += 101;
+    await indexer.syncOnce();
+
+    assert.equal(transactionCalls, 2);
+    assert.equal(indexer.status().events, 57);
+    assert.equal((await readFile(eventsPath, 'utf8')).trim().split('\n').length, 57);
+    assert.equal(indexer.status().gap, 0);
+    assert.ok(indexer.status().lastSweepAt);
   } finally {
     await rm(dataDir, { recursive: true, force: true });
   }

@@ -102,3 +102,15 @@ export const asString = (value: U128Like | undefined): string => {
   if (value && typeof value === 'object' && '0' in value) return String(value[0]);
   return '0';
 };
+
+export function boatHasStake(boat: BoatView | null | undefined): boolean {
+  return Number(asString(boat?.boat.stake)) > 0;
+}
+
+export function boatHasHistory(boat: BoatView | null | undefined): boolean {
+  if (!boat) return false;
+  return boatHasStake(boat)
+    || boat.boat.stake_season > 0
+    || boat.boat.last_fished !== null
+    || boat.boat.indicted_cycle !== null;
+}

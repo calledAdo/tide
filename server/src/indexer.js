@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 const DEFAULT_FASTNEAR_TX_URL = 'https://tx.test.fastnear.com';
 const DEFAULT_POLL_MS = 10_000;
+const DEFAULT_SWEEP_MS = 300_000;
 const ACCOUNT_PAGE_SIZE = 150;
 const TRANSACTION_BATCH_SIZE = 20;
 const RETRIES = 4;
@@ -277,11 +278,13 @@ export function createIndexer({
   fetchFn = globalThis.fetch,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   logger = console,
+  now = () => Date.now(),
 } = {}) {
   const settings = {
     enabled: config?.indexerEnabled ?? true,
     fastNearTxUrl: (config?.fastNearTxUrl ?? DEFAULT_FASTNEAR_TX_URL).replace(/\/$/, ''),
     pollMs: config?.indexerPollMs ?? DEFAULT_POLL_MS,
+    sweepMs: config?.indexerSweepMs ?? DEFAULT_SWEEP_MS,
     dataDir: config?.dataDir ?? '.',
     contractId: config?.tideContract,
   };
@@ -293,6 +296,7 @@ export function createIndexer({
     enabled: settings.enabled,
     txsTotal: null,
     lastPollAt: null,
+    lastSweepAt: null,
     lastError: null,
   };
   let initialized = false;
@@ -382,12 +386,15 @@ export function createIndexer({
     return Array.isArray(result?.account_txs) ? result.account_txs : [];
   }
 
-  async function collectAccountTransactions() {
+  async function collectAccountTransactions({ fullSweep = false } = {}) {
     const entries = [];
     let maxBlockHeight = null;
     while (true) {
       const page = await fetchAccountPage(maxBlockHeight);
       entries.push(...page);
+      const hashes = page.map((entry) => entry?.transaction_hash).filter((hash) => typeof hash === 'string' && hash);
+      const pageIsKnown = hashes.length > 0 && hashes.every((hash) => indexedTxs.has(hash));
+      if (!fullSweep && pageIsKnown) break;
       if (page.length < ACCOUNT_PAGE_SIZE) break;
       const heights = page.map((entry) => asNumber(entry?.tx_block_height)).filter((height) => height !== null);
       if (!heights.length) break;
@@ -421,11 +428,12 @@ export function createIndexer({
     return [...byHash.values()];
   }
 
-  async function processTransactions(entries) {
+  async function processTransactions(entries, { reprocess = false } = {}) {
     const seen = new Set(indexedTxs);
     const newEntries = sortOldest(dedupeAccountTransactions(entries).filter((entry) => {
       const hash = entry?.transaction_hash;
-      if (typeof hash !== 'string' || !hash || seen.has(hash)) return false;
+      if (typeof hash !== 'string' || !hash || (!reprocess && seen.has(hash))) return false;
+      if (seen.has(hash)) return true;
       seen.add(hash);
       return true;
     }));
@@ -462,10 +470,17 @@ export function createIndexer({
 
   async function syncOnce() {
     await initialize();
-    const entries = initialPollDone ? await fetchAccountPage() : await collectAccountTransactions();
-    await processTransactions(entries);
+    const currentTime = now();
+    const gap = state.txsTotal === null ? 0 : Math.max(0, state.txsTotal - indexedTxs.size);
+    const sweepDue = !initialPollDone || state.lastSweepAt === null || currentTime - Date.parse(state.lastSweepAt) >= settings.sweepMs;
+    const fullSweep = sweepDue || gap > 0;
+    const entries = fullSweep
+      ? await collectAccountTransactions({ fullSweep: true })
+      : await collectAccountTransactions();
+    await processTransactions(entries, { reprocess: initialPollDone && sweepDue });
     initialPollDone = true;
-    state.lastPollAt = new Date().toISOString();
+    state.lastPollAt = new Date(currentTime).toISOString();
+    if (fullSweep) state.lastSweepAt = state.lastPollAt;
     state.lastError = null;
     return state;
   }
@@ -500,8 +515,11 @@ export function createIndexer({
       enabled: state.enabled,
       source: 'fastnear',
       txsSeen: indexedTxs.size,
+      processedHashes: indexedTxs.size,
       txsTotal: state.txsTotal,
+      gap: state.txsTotal === null ? null : Math.max(0, state.txsTotal - indexedTxs.size),
       lastPollAt: state.lastPollAt,
+      lastSweepAt: state.lastSweepAt,
       events: indexes.count(),
       lastError: state.lastError,
     }),

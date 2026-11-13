@@ -64,10 +64,8 @@ export function AgoraPage({ snapshot, wallet, walletApi, onConnect, run, onRefre
         </section>
       ) : (
         <section className="docket">
-          <p className="eyebrow">
-            CURRENT DOCKET · CYCLE {snapshot.assembly?.cycle ?? '—'}
-          </p>
-          <h2>ACCUSED OF OVERFISHING</h2>
+          <p className="eyebrow">CURRENT DOCKET · CYCLE {snapshot.assembly?.cycle ?? '—'}</p>
+          <h2>WHO TO WATCH</h2>
           <div className="docket-grid">
             {snapshot.indictments.map(([name, overage]) => (
               <article key={name}>
@@ -93,6 +91,7 @@ export function AgoraPage({ snapshot, wallet, walletApi, onConnect, run, onRefre
           <div>
             <p className="eyebrow">ARCHIVE · /API/ASSEMBLIES</p>
             <h2>THE OSTRAKA WALL</h2>
+            <p className="archive-caption">A cycle is three fishing days, followed by one assembly.</p>
           </div>
           <label className="archive-toggle">
             <input

@@ -10,7 +10,8 @@ import type {
   SeaView,
   TideSnapshot,
 } from './types';
-import { asString } from './types';
+import { asString, boatHasHistory } from './types';
+import { readBotAccounts } from './bots';
 
 const emptySnapshot: TideSnapshot = {
   sea: null,
@@ -251,9 +252,16 @@ export class TideClient {
         localStorage.getItem(`tide-known-boats:${CONTRACT}`) ?? '[]',
       ) as unknown;
       if (Array.isArray(saved)) {
-        saved
-          .filter((item): item is string => typeof item === 'string')
-          .forEach((item) => this.known.add(item));
+        const accounts = saved.filter(
+          (item): item is string => typeof item === 'string' && item !== CONTRACT,
+        );
+        accounts.forEach((item) => this.known.add(item));
+        if (accounts.length !== saved.length) {
+          localStorage.setItem(
+            `tide-known-boats:${CONTRACT}`,
+            JSON.stringify(accounts),
+          );
+        }
       }
     } catch {
       // Malformed local state is disposable.
@@ -263,7 +271,7 @@ export class TideClient {
   private rememberKnown(accounts: string[]): void {
     let changed = false;
     accounts.forEach((account) => {
-      if (account && !this.known.has(account)) {
+      if (account && account !== CONTRACT && !this.known.has(account)) {
         this.known.add(account);
         changed = true;
       }
@@ -338,6 +346,8 @@ export class TideClient {
         : await this.view<Params>('get_params');
       this.paramsLoaded = true;
       const assembly = await this.view<AssemblyView>('get_assembly');
+      const botAccounts = await readBotAccounts();
+      this.rememberKnown([...botAccounts]);
       const exiles = await this.view<Exile[]>('get_exiles');
       const cycle = Math.floor(sea.season / 3);
       const [indictments, previousIndictments] = await Promise.all([
@@ -345,7 +355,6 @@ export class TideClient {
         this.view<Indictment[]>('get_indictments', { cycle: Math.max(0, cycle - 1) }),
       ]);
       const discovered = [
-        ...(this.account ? [this.account] : []),
         ...accountList(indictments),
         ...accountList(previousIndictments),
         ...exiles.map((item) => item[0]),
@@ -353,6 +362,7 @@ export class TideClient {
         ...(assembly.last_result?.exiled ?? []),
       ];
       this.rememberKnown(discovered);
+      const historicalAccounts = new Set(discovered);
       let failed = false;
       const boats = { ...this.snapshot.boats };
       let playerBalance = this.snapshot.playerBalance;
@@ -382,6 +392,23 @@ export class TideClient {
         failed ||= result.failed;
         if (!result.failed) boats[account] = result.value;
       });
+      const currentKnown = new Set<string>();
+      [...this.known].forEach((account) => {
+        const boat = boats[account];
+        if (account !== CONTRACT && (historicalAccounts.has(account) || boatHasHistory(boat))) {
+          currentKnown.add(account);
+        } else {
+          delete boats[account];
+        }
+      });
+      this.known = currentKnown;
+      Object.keys(boats).forEach((account) => {
+        if (account === CONTRACT || !currentKnown.has(account)) delete boats[account];
+      });
+      localStorage.setItem(
+        `tide-known-boats:${CONTRACT}`,
+        JSON.stringify([...this.known]),
+      );
       const history = this.rememberHistory(
         sea.season,
         numberValue(asString(sea.stock_fish)),

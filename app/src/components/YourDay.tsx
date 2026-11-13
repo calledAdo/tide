@@ -1,40 +1,31 @@
 import { useMemo, useState } from 'react';
-import { tideAmountExceedsBalance, tideUnits } from '../config';
 import type { BoatView, TideSnapshot } from '../near/types';
 import { asString } from '../near/types';
 import type { TideWallet, WalletSnapshot } from '../near/wallet';
 import {
-  compactNumber,
   formatTide,
   formatTideAmount,
   unitsToNumber,
   TIDE_DECIMALS,
 } from '../lib/format';
-import { assemblyStage, RunAction, seconds } from './shared';
-import { AssemblyTakeover } from './AssemblyTakeover';
+import { RunAction, seconds } from './shared';
 
 type Props = {
   wallet: WalletSnapshot;
   walletApi: TideWallet;
   snapshot: TideSnapshot;
   onConnect: () => void;
-  onOpenWallet: () => void;
   run: RunAction;
   onRefresh: () => void;
 };
 
-export function YourDay({ wallet, walletApi, snapshot, onConnect, onOpenWallet, run, onRefresh }: Props) {
-  const [amount, setAmount] = useState('10000');
+export function YourDay({ wallet, walletApi, snapshot, onConnect, run, onRefresh }: Props) {
   const [effort, setEffort] = useState(50);
   const [custom, setCustom] = useState(false);
-  const [selected, setSelected] = useState<string[]>([]);
   const account = wallet.account;
   const boat = account ? snapshot.boats[account] : null;
   const sea = snapshot.sea;
-  const stage = assemblyStage(sea, snapshot.assembly);
   const hasBoat = Boolean(boat && Number(asString(boat.boat.stake)) > 0);
-  const hasTide = BigInt(snapshot.playerBalance || '0') > 0n;
-  const amountTooMuch = tideAmountExceedsBalance(amount, snapshot.playerBalance);
   const fair = unitsToNumber(asString(boat?.fair_share), TIDE_DECIMALS);
   const fullCatch = unitsToNumber(asString(boat?.full_effort_catch), TIDE_DECIMALS);
   const fullFuel = unitsToNumber(asString(boat?.full_effort_fuel), TIDE_DECIMALS);
@@ -100,44 +91,11 @@ export function YourDay({ wallet, walletApi, snapshot, onConnect, onOpenWallet, 
       </div>
     </section>
   );
-  if (stage && snapshot.assembly) return (
-    <section className="your-day assembly-day">
-      <AssemblyTakeover wallet={wallet} walletApi={walletApi} snapshot={snapshot}
-        onConnect={onConnect} selected={selected} setSelected={setSelected}
-        run={run} onRefresh={onRefresh} />
-    </section>
-  );
   if (!hasBoat) return (
     <section className="your-day">
-      <p className="eyebrow">YOUR DAY · FIRST STAKE</p>
-      <h2>LAUNCH<br />YOUR BOAT</h2>
-      <p>One account, one boat. It fishes from tomorrow; staking more upgrades this hull.</p>
-      <div className="stake-presets">
-        {([['10000', 'DINGHY'], ['50000', 'TRAWLER'], ['1000000', 'FACTORY SHIP']] as const)
-          .map(([value, tier]) => (
-            <button
-              key={value}
-              aria-pressed={amount === value}
-              disabled={tideAmountExceedsBalance(value, snapshot.playerBalance)}
-              onClick={() => setAmount(value)}
-            >
-              <b>{compactNumber(value)} TIDE</b><span>{tier}</span>
-            </button>
-          ))}
-      </div>
-      {amountTooMuch && (
-        <p className="wallet-note">You have {formatTide(snapshot.playerBalance)} in your wallet</p>
-      )}
-      <button className="primary wide" disabled={!hasTide || amountTooMuch}
-        onClick={() => call('Launch your boat', 'stake', {
-          amount: tideUnits(amount).toString(),
-        })}>
-        LAUNCH YOUR BOAT · {compactNumber(amount)} TIDE
-      </button>
-      {!hasTide && <button className="tide-needed" onClick={onOpenWallet}>
-        YOU NEED TIDE TO LAUNCH A BOAT · GET TEST TIDE
-      </button>}
-      <small className="burn-note">1% build burn · fishes from tomorrow</small>
+      <p className="eyebrow">TODAY · BLOCKED</p>
+      <h2>YOUR BOAT IS DOCKED</h2>
+      <p>Launch a hull in THE HULL below. It fishes from tomorrow; staking more upgrades this hull.</p>
     </section>
   );
   if (blocked === 'FISHED') return (
@@ -150,6 +108,14 @@ export function YourDay({ wallet, walletApi, snapshot, onConnect, onOpenWallet, 
       </div>
       <div className="next-season">NEXT DAY IN <b>{seconds(sea?.seconds_left_in_season ?? 0)}</b></div>
       <p className="standing">STANDING · RANKING IS CATCHING UP</p>
+    </section>
+  );
+  if (blocked === 'BUILT TODAY') return (
+    <section className="your-day">
+      <p className="eyebrow">TODAY · BLOCKED</p>
+      <h2>YOUR HULL IS NEW</h2>
+      <p>A boat launched or upgraded today fishes from tomorrow.</p>
+      <div className="next-season">NEXT DAY IN <b>{seconds(sea?.seconds_left_in_season ?? 0)}</b></div>
     </section>
   );
   const fishEffort = (hard: boolean) => {

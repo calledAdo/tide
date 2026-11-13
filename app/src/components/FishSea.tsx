@@ -1,7 +1,10 @@
+import { useEffect, useState } from 'react';
 import type { SeaView, TideSnapshot } from '../near/types';
-import { asString } from '../near/types';
+import { asString, boatHasStake } from '../near/types';
+import { CONTRACT } from '../config';
 import { compactNumber } from '../lib/format';
 import { shortName } from './shared';
+import { readBotAccounts } from '../near/bots';
 
 type Props = {
   sea: SeaView | null;
@@ -15,11 +18,17 @@ function tier(stake: number): 'dinghy' | 'trawler' | 'factory' {
 }
 
 export function FishSea({ sea, snapshot, account, onSelect }: Props) {
+  const [bots, setBots] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let live = true;
+    void readBotAccounts().then((items) => { if (live) setBots(items); });
+    return () => { live = false; };
+  }, []);
   const stock = Number(asString(sea?.stock_fish));
-  const fishCount = Math.max(4, Math.min(50, Math.round(stock / 20_000)));
+  const fishCount = Math.max(0, Math.min(50, Math.round(stock / 20_000)));
   const boats = Object.entries(snapshot.boats).filter(([name, boat]) => {
     const until = snapshot.exiles.find(([item]) => item === name)?.[1] ?? boat?.exiled_until;
-    if (!boat || Number(asString(boat.boat.stake)) <= 0) return false;
+    if (name === CONTRACT || !boatHasStake(boat)) return false;
     return until === undefined || until === null || until <= (sea?.season ?? 0);
   });
   const exiled = new Map(snapshot.exiles);
@@ -38,12 +47,23 @@ export function FishSea({ sea, snapshot, account, onSelect }: Props) {
       </div>
       <div className="sea-visual">
         <svg viewBox="0 0 820 360" role="img" aria-label="The live shared sea with rival boats">
-          <path className="waterline" d="M0 48 Q80 30 160 48 T320 48 T480 48 T640 48 T820 48" />
+          <path className="wave wave-one" d="M0 48 Q80 30 160 48 T320 48 T480 48 T640 48 T820 48" />
+          <path className="wave wave-two" d="M0 63 Q70 46 140 63 T280 63 T420 63 T560 63 T700 63 T840 63" />
+          <path className="wave wave-three" d="M0 78 Q90 62 180 78 T360 78 T540 78 T720 78 T900 78" />
           <path className="water-band" d="M0 54 H820 V360 H0Z" />
+          <path className="caustic caustic-one" d="M120 130q45-18 90 0t90 0M360 210q45-18 90 0t90 0" />
+          <path className="caustic caustic-two" d="M210 285q35-12 70 0t70 0M550 125q35-12 70 0t70 0" />
           {Array.from({ length: fishCount }, (_, index) => (
-            <g key={`fish-${index}`} transform={`translate(${35 + index * 137 % 750}
-              ${80 + index * 67 % 235})`}>
-              <path className="fish-glyph" d="M0 4C3 0 9 0 12 4C9 8 3 8 0 4ZM12 4L16 0V8Z" />
+            <g
+              key={`fish-${index}`}
+              transform={`translate(${35 + index * 137 % 750} ${80 + index * 67 % 235})`}
+            >
+              <g
+                className={`fish-glyph fish-swim-${index % 3}`}
+                style={{ animationDelay: `${index * -0.37}s` }}
+              >
+                <path className="fish-body" d="M0 4C3 0 9 0 12 4C9 8 3 8 0 4ZM12 4L16 0V8Z" />
+              </g>
             </g>
           ))}
           {visibleBoats.map(([name, boat], index) => {
@@ -52,6 +72,7 @@ export function FishSea({ sea, snapshot, account, onSelect }: Props) {
             const kind = tier(stake);
             const indicted = snapshot.indictments.some(([item]) => item === name);
             const isYou = name === account;
+            const isBot = bots.has(name);
             const catching = boat.boat.last_fished === sea?.season;
             const x = visibleBoats.length === 1
               ? 35
@@ -68,7 +89,11 @@ export function FishSea({ sea, snapshot, account, onSelect }: Props) {
               }}
               aria-label={`Inspect ${name}`}
             >
-              <text x="0" y="-10">{shortName(name)}</text>
+              <title>{isBot
+                ? "BOT · a demo captain run by the project's server; the contract treats it "
+                  + 'like any other account'
+                : `Inspect ${shortName(name)}`}</title>
+              <text x="0" y="-10">{shortName(name)}{isBot ? ' · BOT' : ''}</text>
               <path d={kind === 'factory'
                 ? 'M0 0h58l-8 14H8z'
                 : kind === 'trawler' ? 'M0 1h45l-7 12H7z' : 'M0 2h31l-6 10H5z'} />

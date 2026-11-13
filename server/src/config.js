@@ -11,9 +11,13 @@ const DEFAULTS = {
   KEEPER_INTERVAL_MS: '30000',
   KEEPER_MIN_BEHIND: '30',
   KEEPER_ENABLED: 'true',
+  BOTS_ENABLED: 'true',
+  BOTS_INTERVAL_MS: '20000',
+  BOT_KEYS_FILE: '/etc/tide/bot-keys.json',
   INDEXER_ENABLED: 'true',
   FASTNEAR_TX_URL: 'https://tx.test.fastnear.com',
   INDEXER_POLL_MS: '10000',
+  INDEXER_SWEEP_MS: '300000',
 };
 
 function value(env, name) {
@@ -86,9 +90,13 @@ export function loadConfig(env = process.env) {
     keeperIntervalMs: positiveInteger(value(env, 'KEEPER_INTERVAL_MS'), 'KEEPER_INTERVAL_MS'),
     keeperMinBehind: nonNegativeInteger(value(env, 'KEEPER_MIN_BEHIND'), 'KEEPER_MIN_BEHIND'),
     keeperEnabled: booleanValue(value(env, 'KEEPER_ENABLED'), 'KEEPER_ENABLED'),
+    botsEnabled: booleanValue(value(env, 'BOTS_ENABLED'), 'BOTS_ENABLED'),
+    botsIntervalMs: positiveInteger(value(env, 'BOTS_INTERVAL_MS'), 'BOTS_INTERVAL_MS'),
+    botKeysFile: value(env, 'BOT_KEYS_FILE'),
     indexerEnabled: booleanValue(value(env, 'INDEXER_ENABLED'), 'INDEXER_ENABLED'),
     fastNearTxUrl: value(env, 'FASTNEAR_TX_URL').replace(/\/$/, ''),
     indexerPollMs: positiveInteger(value(env, 'INDEXER_POLL_MS'), 'INDEXER_POLL_MS'),
+    indexerSweepMs: positiveInteger(value(env, 'INDEXER_SWEEP_MS'), 'INDEXER_SWEEP_MS'),
     sponsorMinimumYocto: nearToYocto('1'),
   };
 }

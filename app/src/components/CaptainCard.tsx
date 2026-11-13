@@ -10,6 +10,7 @@ import {
 } from '../near/history';
 import { formatTide } from '../lib/format';
 import { shortName } from './shared';
+import { readBotAccounts } from '../near/bots';
 
 type Props = {
   account: string;
@@ -19,8 +20,14 @@ type Props = {
 };
 
 export function CaptainCard({ account, boat, snapshot, onClose }: Props) {
+  const [bots, setBots] = useState<Set<string>>(new Set());
   const [history, setHistory] = useState<BoatHistory | null>(null);
   const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void readBotAccounts().then((items) => { if (live) setBots(items); });
+    return () => { live = false; };
+  }, []);
   useEffect(() => {
     let live = true;
     void historyApi.boat(account).then((data) => {
@@ -53,10 +60,21 @@ export function CaptainCard({ account, boat, snapshot, onClose }: Props) {
     }}>
       <aside className="captain-card" role="dialog" aria-modal="true" aria-labelledby="captain-title">
         <header className="drawer-head">
-          <div><p className="eyebrow">CAPTAIN CARD</p><h2 id="captain-title">{shortName(account)}</h2></div>
+          <div>
+            <p className="eyebrow">
+              CAPTAIN CARD {bots.has(account) && <em className="bot-tag">BOT</em>}
+            </p>
+            <h2 id="captain-title">{shortName(account)}</h2>
+          </div>
           <button className="icon-button" onClick={onClose} aria-label="Close captain card">×</button>
         </header>
         <p className="account-code">{account}</p>
+        {bots.has(account) && (
+          <p className="bot-note">
+            BOT · a demo captain run by the project&apos;s server; the contract treats it
+            like any other account
+          </p>
+        )}
         <div className="captain-stats">
           <div><span>HULL</span><b>{tier}</b></div>
           <div><span>STAKE</span><b>{formatTide(asString(boat?.boat.stake))}</b></div>
