@@ -2,7 +2,8 @@ import type { Dispatch, SetStateAction } from 'react';
 import { TideWallet, type WalletSnapshot } from '../near/wallet';
 import type { TideSnapshot } from '../near/types';
 import { asString } from '../near/types';
-import { compactNumber, unitsToNumber, TIDE_DECIMALS } from '../lib/format';
+import { tideAmountExceedsBalance } from '../config';
+import { compactNumber, formatTide, unitsToNumber, TIDE_DECIMALS } from '../lib/format';
 import { RunAction, assemblyStage, shortName } from './shared';
 
 type AssemblyTakeoverProps = {
@@ -31,6 +32,10 @@ export function AssemblyTakeover({
   if (!assembly || !stage) return null;
 
   const targets = snapshot.indictments.map(([name, overage]) => ({ name, overage }));
+  const shardTooMuch = tideAmountExceedsBalance(
+    String(selected.length),
+    snapshot.playerBalance,
+  );
   const toggle = (name: string) => {
     setSelected((current) =>
       current.includes(name)
@@ -107,19 +112,26 @@ export function AssemblyTakeover({
             )}
           </div>
           {wallet.account ? (
-            <button
-              className="primary wide"
-              disabled={selected.length === 0}
-              onClick={() =>
-                run('Write shard', async () => {
-                  const result = await walletCall('write_shard', { names: selected });
-                  onRefresh();
-                  return result;
-                })
-              }
-            >
-              WRITE SHARD · BURNS {selected.length || 1} TIDE EACH
-            </button>
+            <>
+              <button
+                className="primary wide"
+                disabled={selected.length === 0 || shardTooMuch}
+                onClick={() =>
+                  run('Write shard', async () => {
+                    const result = await walletCall('write_shard', { names: selected });
+                    onRefresh();
+                    return result;
+                  })
+                }
+              >
+                WRITE SHARD · BURNS {selected.length || 1} TIDE EACH
+              </button>
+              {shardTooMuch && (
+                <p className="wallet-note">
+                  You have {formatTide(snapshot.playerBalance)} in your wallet
+                </p>
+              )}
+            </>
           ) : (
             <button className="primary wide" onClick={onConnect}>
               CONNECT METAMASK TO VOTE

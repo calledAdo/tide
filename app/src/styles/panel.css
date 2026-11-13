@@ -90,12 +90,24 @@
   margin: 0;
 }
 
-.balance-list div {
+.balance-list > div {
   display: flex;
   justify-content: space-between;
   gap: 10px;
   padding: 5px 0;
   border-bottom: 1px solid #14141422;
+}
+
+.balance-list > .balance-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.balance-pair > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
 }
 
 .balance-list dt {

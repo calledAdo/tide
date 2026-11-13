@@ -8,7 +8,7 @@ import {
   type BoatHistory,
 } from '../near/history';
 import type { TideWallet, WalletSnapshot } from '../near/wallet';
-import { tideUnits } from '../config';
+import { tideAmountExceedsBalance, tideUnits } from '../config';
 import { formatTide, compactNumber } from '../lib/format';
 import { RunAction, shortName } from './shared';
 
@@ -55,6 +55,7 @@ export function BoatPage({ wallet, walletApi, snapshot, onConnect, run, onRefres
     </main>
   );
   const stake = Number(asString(boat?.boat.stake));
+  const amountTooMuch = tideAmountExceedsBalance(amount, snapshot.playerBalance);
   const nextTier = stake < 50_000e18 ? 'TRAWLER' : 'FACTORY SHIP';
   const step = stake < 50_000e18 ? 50_000 : 1_000_000;
   const progress = Math.min(100, stake / (step * 1e18) * 100);
@@ -93,9 +94,14 @@ export function BoatPage({ wallet, walletApi, snapshot, onConnect, run, onRefres
               onChange={(event) => setAmount(event.target.value.replace(/\D/g, ''))}
             />
           </label>
+          {amountTooMuch && (
+            <p className="wallet-note">
+              You have {formatTide(snapshot.playerBalance)} in your wallet
+            </p>
+          )}
           <button
             className="primary"
-            disabled={Boolean(blocked)}
+            disabled={Boolean(blocked) || !amount || amountTooMuch}
             onClick={() => call(
               boat ? 'Upgrade boat' : 'Launch your boat',
               'stake',

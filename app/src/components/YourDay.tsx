@@ -1,9 +1,15 @@
 import { useMemo, useState } from 'react';
-import { CONTRACT, tideUnits } from '../config';
+import { tideAmountExceedsBalance, tideUnits } from '../config';
 import type { BoatView, TideSnapshot } from '../near/types';
 import { asString } from '../near/types';
 import type { TideWallet, WalletSnapshot } from '../near/wallet';
-import { compactNumber, formatTide, formatTideAmount, unitsToNumber, TIDE_DECIMALS } from '../lib/format';
+import {
+  compactNumber,
+  formatTide,
+  formatTideAmount,
+  unitsToNumber,
+  TIDE_DECIMALS,
+} from '../lib/format';
 import { assemblyStage, RunAction, seconds } from './shared';
 import { AssemblyTakeover } from './AssemblyTakeover';
 
@@ -28,6 +34,7 @@ export function YourDay({ wallet, walletApi, snapshot, onConnect, onOpenWallet, 
   const stage = assemblyStage(sea, snapshot.assembly);
   const hasBoat = Boolean(boat && Number(asString(boat.boat.stake)) > 0);
   const hasTide = BigInt(snapshot.playerBalance || '0') > 0n;
+  const amountTooMuch = tideAmountExceedsBalance(amount, snapshot.playerBalance);
   const fair = unitsToNumber(asString(boat?.fair_share), TIDE_DECIMALS);
   const fullCatch = unitsToNumber(asString(boat?.full_effort_catch), TIDE_DECIMALS);
   const fullFuel = unitsToNumber(asString(boat?.full_effort_fuel), TIDE_DECIMALS);
@@ -108,12 +115,20 @@ export function YourDay({ wallet, walletApi, snapshot, onConnect, onOpenWallet, 
       <div className="stake-presets">
         {([['10000', 'DINGHY'], ['50000', 'TRAWLER'], ['1000000', 'FACTORY SHIP']] as const)
           .map(([value, tier]) => (
-            <button key={value} aria-pressed={amount === value} onClick={() => setAmount(value)}>
+            <button
+              key={value}
+              aria-pressed={amount === value}
+              disabled={tideAmountExceedsBalance(value, snapshot.playerBalance)}
+              onClick={() => setAmount(value)}
+            >
               <b>{compactNumber(value)} TIDE</b><span>{tier}</span>
             </button>
           ))}
       </div>
-      <button className="primary wide" disabled={!hasTide}
+      {amountTooMuch && (
+        <p className="wallet-note">You have {formatTide(snapshot.playerBalance)} in your wallet</p>
+      )}
+      <button className="primary wide" disabled={!hasTide || amountTooMuch}
         onClick={() => call('Launch your boat', 'stake', {
           amount: tideUnits(amount).toString(),
         })}>

@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { CONTRACT, EXPLORER, nearUnits, tideUnits } from '../config';
+import {
+  CONTRACT,
+  EXPLORER,
+  nearUnits,
+  tideAmountExceedsBalance,
+  tideUnits,
+} from '../config';
 import { formatNear, formatTide } from '../lib/format';
+import { historyApi } from '../near/history';
 import {
   formatAccountAddress,
   isEthImplicitAccount,
@@ -10,7 +17,12 @@ import {
 } from '../near/wallet';
 import type { TideSnapshot } from '../near/types';
 import { asString } from '../near/types';
-import { loadTransactions, RunAction } from './shared';
+import {
+  isFaucetClaimedLocally,
+  loadTransactions,
+  markFaucetClaimed,
+  RunAction,
+} from './shared';
 
 type WalletPanelProps = {
   wallet: TideWallet;
@@ -33,6 +45,7 @@ export function WalletPanel({
   run,
 }: WalletPanelProps) {
   const account = wallet.state.account;
+  const boat = account ? snapshot.boats[account] : null;
   const [qr, setQr] = useState('');
   const [copy, setCopy] = useState('');
   const [transferNote, setTransferNote] = useState('');
@@ -42,8 +55,28 @@ export function WalletPanel({
   const [topupAmount, setTopupAmount] = useState('');
   const [unstakeAmount, setUnstakeAmount] = useState('');
   const [working, setWorking] = useState('');
+  const [localFaucetClaimed, setLocalFaucetClaimed] = useState(false);
+  const [indexerFaucetClaimed, setIndexerFaucetClaimed] = useState(false);
   const panelRef = useRef<HTMLElement>(null);
   const faucetRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!account) return undefined;
+    setLocalFaucetClaimed(isFaucetClaimedLocally(account));
+    setIndexerFaucetClaimed(false);
+    let live = true;
+    const onClaimed = (event: Event) => {
+      if ((event as CustomEvent<string>).detail === account) setLocalFaucetClaimed(true);
+    };
+    window.addEventListener('tide-faucet-claimed', onClaimed);
+    void historyApi.faucetClaimed(account).then((claimed) => {
+      if (live) setIndexerFaucetClaimed(claimed);
+    }).catch(() => undefined);
+    return () => {
+      live = false;
+      window.removeEventListener('tide-faucet-claimed', onClaimed);
+    };
+  }, [account]);
 
   useEffect(() => {
     if (account) {
@@ -66,7 +99,16 @@ export function WalletPanel({
   }, [onClose]);
 
   if (!account) return null;
-  const boat = snapshot.boats[account];
+  const boatBalance = asString(boat?.boat.stake);
+  const totalBalance = (
+    BigInt(snapshot.playerBalance || '0') + BigInt(boatBalance)
+  ).toString();
+  const faucetClaimed = localFaucetClaimed
+    || indexerFaucetClaimed
+    || BigInt(snapshot.playerBalance || '0') > 0n
+    || BigInt(asString(boat?.boat.stake)) > 0n;
+  const transferTooMuch = tideAmountExceedsBalance(tideAmount, snapshot.playerBalance);
+  const topupTooMuch = tideAmountExceedsBalance(topupAmount, snapshot.playerBalance);
   const exile = boat?.exiled_until;
   const copyAddress = async () => {
     try {
@@ -77,9 +119,17 @@ export function WalletPanel({
       setCopy('Copy unavailable');
     }
   };
-  const execute = (name: string, task: () => Promise<TransactionResult>) => {
+  const execute = (
+    name: string,
+    task: () => Promise<TransactionResult>,
+    onSuccess?: () => void,
+  ) => {
     setWorking(name);
-    run(name, task);
+    run(name, async () => {
+      const result = await task();
+      onSuccess?.();
+      return result;
+    });
     window.setTimeout(() => setWorking(''), 700);
   };
   const isMetaMaskAccount = !wallet.state.dev && isEthImplicitAccount(account);
@@ -128,8 +178,11 @@ export function WalletPanel({
           <h3>Balances</h3>
           <dl className="balance-list">
             <div><dt>NEAR for gas</dt><dd>{formatNear(snapshot.nearBalance)}</dd></div>
-            <div><dt>TIDE in wallet</dt><dd>{formatTide(snapshot.playerBalance)}</dd></div>
-            <div><dt>TIDE in your boat</dt><dd>{formatTide(asString(boat?.boat.stake))}</dd></div>
+            <div className="balance-pair">
+              <div><dt>TIDE in wallet</dt><dd>{formatTide(snapshot.playerBalance)}</dd></div>
+              <div><dt>TIDE in your boat</dt><dd>{formatTide(boatBalance)}</dd></div>
+            </div>
+            <div><dt>TOTAL TIDE</dt><dd>{formatTide(totalBalance)}</dd></div>
             <div>
               <dt>STATUS</dt>
               <dd>
@@ -161,13 +214,26 @@ export function WalletPanel({
               >
                 GET TEST NEAR · GAS
               </button>
-              <button
-                className="secondary wallet-action"
-                disabled={wallet.state.dev || Boolean(working)}
-                onClick={() => execute('Claim faucet', () => wallet.call('claim_faucet'))}
-              >
-                GET TEST TIDE · TESTNET ONLY
-              </button>
+              {faucetClaimed ? (
+                <button className="secondary wallet-action" disabled>
+                  TEST TIDE CLAIMED ✓
+                </button>
+              ) : (
+                <button
+                  className="secondary wallet-action"
+                  disabled={wallet.state.dev || Boolean(working)}
+                  onClick={() => execute(
+                    'Claim faucet',
+                    () => wallet.call('claim_faucet'),
+                    () => {
+                      markFaucetClaimed(account);
+                      setLocalFaucetClaimed(true);
+                    },
+                  )}
+                >
+                  GET TEST TIDE · TESTNET ONLY
+                </button>
+              )}
             </div>
             {qr && <img className="wallet-qr" src={qr} alt="QR code for NEAR deposit address" />}
           </div>
@@ -193,7 +259,8 @@ export function WalletPanel({
             </label>
             <button
               className="secondary wallet-action"
-              disabled={wallet.state.dev || !tideAmount || !recipient || Boolean(working)}
+              disabled={wallet.state.dev || !tideAmount || !recipient
+                || transferTooMuch || Boolean(working)}
               onClick={() => execute('Send TIDE', async () => {
                 const target = recipient.trim();
                 const registered = await tideClient.storageBalance(target);
@@ -215,6 +282,11 @@ export function WalletPanel({
             >
               SEND TIDE · 1 YOCTO
             </button>
+            {transferTooMuch && (
+              <p className="wallet-note">
+                You have {formatTide(snapshot.playerBalance)} in your wallet
+              </p>
+            )}
             <label>
               NEAR AMOUNT
               <input
@@ -255,13 +327,18 @@ export function WalletPanel({
             </label>
             <button
               className="secondary wallet-action"
-              disabled={!topupAmount || Boolean(working)}
+              disabled={!topupAmount || topupTooMuch || Boolean(working)}
               onClick={() => execute('Top up boat', () => wallet.call('stake', {
                 amount: tideUnits(topupAmount).toString(),
               }))}
             >
               TOP UP BOAT
             </button>
+            {topupTooMuch && (
+              <p className="wallet-note">
+                You have {formatTide(snapshot.playerBalance)} in your wallet
+              </p>
+            )}
             <label>
               UNSTAKE TIDE
               <input

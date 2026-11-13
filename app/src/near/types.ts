@@ -94,6 +94,7 @@ export type TideSnapshot = {
   history: HistoryPoint[];
   loading: boolean;
   error: string;
+  stale: boolean;
 };
 
 export const asString = (value: U128Like | undefined): string => {

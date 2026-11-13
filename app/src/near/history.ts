@@ -104,6 +104,7 @@ export type AssemblyHistory = {
 export type TideEvent = Record<string, unknown> & {
   event?: string;
   account?: string;
+  data?: { memo?: unknown };
   season?: number;
 };
 
@@ -115,6 +116,12 @@ async function get<T>(path: string): Promise<T> {
 
 export const historyApi = {
   events: (params = '') => get<TideEvent[]>(`/events${params}`),
+  faucetClaimed: async (account: string): Promise<boolean> => {
+    const events = await historyApi.events(
+      `?account=${encodeURIComponent(account)}&event=ft_mint`,
+    );
+    return events.some((event) => event.data?.memo === 'faucet');
+  },
   boat: (account: string) => get<BoatHistory>(`/boat/${encodeURIComponent(account)}/history`),
   assemblies: (limit = 12, active = false) => get<AssemblyHistory[]>(
     `/assemblies?${active ? 'active=true&' : ''}limit=${limit}`,

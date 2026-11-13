@@ -28,6 +28,14 @@ export const tideUnits = (amount: string): bigint => {
   return BigInt(whole) * 10n ** 18n + BigInt(fraction.padEnd(18, '0') || '0');
 };
 
+export const tideAmountExceedsBalance = (amount: string, balance: string): boolean => {
+  try {
+    return tideUnits(amount) > BigInt(balance || '0');
+  } catch {
+    return false;
+  }
+};
+
 export const nearUnits = (amount: string): bigint => {
   const clean = amount.replace(/,/g, '').trim();
   if (!/^\d+(\.\d{0,24})?$/.test(clean)) throw new Error('Enter a valid NEAR amount.');

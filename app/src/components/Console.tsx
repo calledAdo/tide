@@ -1,15 +1,23 @@
 import { useEffect, useState } from 'react';
-import { CONTRACT, tideUnits } from '../config';
+import { tideAmountExceedsBalance, tideUnits } from '../config';
 import { TideWallet, type WalletSnapshot } from '../near/wallet';
+import { historyApi } from '../near/history';
 import type { BoatView, SeaView, TideSnapshot } from '../near/types';
 import { asString } from '../near/types';
 import {
   compactNumber,
+  formatTide,
   formatTideAmount,
   unitsToNumber,
   TIDE_DECIMALS,
 } from '../lib/format';
-import { assemblyStage, RunAction, seconds } from './shared';
+import {
+  assemblyStage,
+  isFaucetClaimedLocally,
+  markFaucetClaimed,
+  RunAction,
+  seconds,
+} from './shared';
 import { AssemblyTakeover } from './AssemblyTakeover';
 
 type ConsoleCall = (
@@ -43,6 +51,7 @@ export function Console({
   const [buildAmount, setBuildAmount] = useState('100000');
   const [effort, setEffort] = useState(50);
   const [claimed, setClaimed] = useState(false);
+  const [indexerClaimed, setIndexerClaimed] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const stage = assemblyStage(sea, snapshot.assembly);
   const hasBoat = Boolean(boat && Number(asString(boat.boat.stake)) > 0);
@@ -50,11 +59,28 @@ export function Console({
   const hasNear = BigInt(snapshot.nearBalance || '0') > 0n;
   const isRegistered = snapshot.playerStorage !== null;
   const setupRequired = Boolean(account && (!hasNear || !isRegistered));
+  const faucetClaimed = claimed || hasTide || hasBoat || indexerClaimed;
 
   useEffect(() => {
-    setClaimed(Boolean(
-      account && localStorage.getItem(`tide-faucet-claimed:${CONTRACT}:${account}`),
-    ));
+    if (!account) {
+      setClaimed(false);
+      setIndexerClaimed(false);
+      return undefined;
+    }
+    setClaimed(isFaucetClaimedLocally(account));
+    setIndexerClaimed(false);
+    let live = true;
+    const onClaimed = (event: Event) => {
+      if ((event as CustomEvent<string>).detail === account) setClaimed(true);
+    };
+    window.addEventListener('tide-faucet-claimed', onClaimed);
+    void historyApi.faucetClaimed(account).then((value) => {
+      if (live) setIndexerClaimed(value);
+    }).catch(() => undefined);
+    return () => {
+      live = false;
+      window.removeEventListener('tide-faucet-claimed', onClaimed);
+    };
   }, [account]);
 
   const exiledUntil = boat?.exiled_until ?? null;
@@ -113,19 +139,18 @@ export function Console({
           !wallet.progress &&
           !setupRequired &&
           (!sea || sea.seasons_behind <= 40) &&
-          !hasTide &&
-          !hasBoat &&
-          !claimed && <ClaimStep wallet={wallet} call={call} setClaimed={setClaimed} />}
+          !faucetClaimed && <ClaimStep wallet={wallet} call={call} setClaimed={setClaimed} />}
         {account &&
           !wallet.progress &&
           !setupRequired &&
           (!sea || sea.seasons_behind <= 40) &&
           !hasBoat &&
-          (hasTide || claimed) && (
+          faucetClaimed && (
             <BuildStep
               buildAmount={buildAmount}
               setBuildAmount={setBuildAmount}
               call={call}
+              balance={snapshot.playerBalance}
             />
           )}
         {account &&
@@ -237,6 +262,7 @@ function ClaimStep({
         disabled={wallet.dev}
         onClick={() =>
           call('Claim faucet', 'claim_faucet', {}, 0n, () => {
+            if (wallet.account) markFaucetClaimed(wallet.account);
             setClaimed(true);
           })
         }
@@ -251,11 +277,14 @@ function BuildStep({
   buildAmount,
   setBuildAmount,
   call,
+  balance,
 }: {
   buildAmount: string;
   setBuildAmount: (value: string) => void;
   call: ConsoleCall;
+  balance: string;
 }) {
+  const amountTooMuch = tideAmountExceedsBalance(buildAmount, balance);
   return (
     <>
       <p className="step-kicker">03 / BUILD THE HULL</p>
@@ -273,15 +302,20 @@ function BuildStep({
           <button
             key={preset}
             aria-pressed={buildAmount === preset}
+            disabled={tideAmountExceedsBalance(preset, balance)}
             onClick={() => setBuildAmount(preset)}
           >
             {compactNumber(preset)}
           </button>
         ))}
       </div>
+      {amountTooMuch && (
+        <p className="wallet-note">You have {formatTide(balance)} in your wallet</p>
+      )}
       <p className="burn-note">1% burned · fishes from next season</p>
       <button
         className="primary wide"
+        disabled={!buildAmount || amountTooMuch}
         onClick={() => call('Build your boat', 'stake', {
           amount: tideUnits(buildAmount).toString(),
         })}

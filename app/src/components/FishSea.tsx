@@ -31,7 +31,10 @@ export function FishSea({ sea, snapshot, account, onSelect }: Props) {
     <section className={`sea-wrap ${sea?.dead ? 'dead-sea' : ''}`}>
       <div className="sea-heading">
         <div><p className="eyebrow">$TIDE · SHARED WATER</p><h1>THE SEA</h1></div>
-        <span className="sea-state">{sea?.dead ? 'EXTINCT' : 'LIVE FLEET'}</span>
+        <div className="sea-heading-status">
+          <span className="sea-state">{sea?.dead ? 'EXTINCT' : 'LIVE FLEET'}</span>
+          {snapshot.stale && <span className="sea-stale">STALE</span>}
+        </div>
       </div>
       <div className="sea-visual">
         <svg viewBox="0 0 820 360" role="img" aria-label="The live shared sea with rival boats">

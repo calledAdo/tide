@@ -2,6 +2,17 @@ import { CONTRACT } from '../config';
 import { formatAccountAddress, type TransactionResult } from '../near/wallet';
 import type { AssemblyView, SeaView, TransactionRecord } from '../near/types';
 
+export const faucetClaimedKey = (account: string): string => `tide-faucet-claimed:${account}`;
+
+export function isFaucetClaimedLocally(account: string): boolean {
+  return localStorage.getItem(faucetClaimedKey(account)) !== null;
+}
+
+export function markFaucetClaimed(account: string): void {
+  localStorage.setItem(faucetClaimedKey(account), '1');
+  window.dispatchEvent(new CustomEvent('tide-faucet-claimed', { detail: account }));
+}
+
 export type Toast = {
   id: number;
   kind: 'pending' | 'success' | 'error';

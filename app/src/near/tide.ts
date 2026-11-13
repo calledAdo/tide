@@ -26,6 +26,7 @@ const emptySnapshot: TideSnapshot = {
   history: [],
   loading: true,
   error: '',
+  stale: false,
 };
 
 const historyKey = `tide-history:${NETWORK}:${CONTRACT}`;
@@ -48,6 +49,24 @@ function accountList(value: unknown): string[] {
   ));
 }
 
+class RpcError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'RpcError';
+    this.status = status;
+  }
+}
+
+type ReadOutcome<T> =
+  | { value: T; failed: false }
+  | { value: undefined; failed: true };
+
+const wait = (milliseconds: number): Promise<void> => new Promise((resolve) => {
+  window.setTimeout(resolve, milliseconds);
+});
+
 export class TideClient {
   private listeners = new Set<(snapshot: TideSnapshot) => void>();
   private timer: number | undefined;
@@ -55,6 +74,9 @@ export class TideClient {
   private known = new Set<string>(DEMO_BOATS);
   private snapshot: TideSnapshot = { ...emptySnapshot, history: this.loadHistory() };
   private paramsLoaded = false;
+  private failedRefreshes = 0;
+  private refreshTask: Promise<void> | null = null;
+  private refreshQueued = false;
 
   constructor() {
     this.loadKnown();
@@ -72,6 +94,7 @@ export class TideClient {
 
   setAccount(account: string | undefined): void {
     this.account = account;
+    if (account) this.rememberKnown([account]);
     void this.refresh();
   }
 
@@ -112,12 +135,15 @@ export class TideClient {
         },
       }),
     });
+    if (!response.ok) {
+      throw new RpcError(`Could not read ${method}.`, response.status);
+    }
     const body = await response.json() as {
       result?: { result?: number[] };
       error?: { cause?: { info?: string }; message?: string };
     };
-    if (!response.ok || body.error || !body.result?.result) {
-      throw new Error(body.error?.message ?? `Could not read ${method}.`);
+    if (body.error || body.result?.result === undefined) {
+      throw new RpcError(body.error?.message ?? `Could not read ${method}.`, response.status);
     }
     const bytes = new Uint8Array(body.result.result);
     return JSON.parse(new TextDecoder().decode(bytes)) as T;
@@ -138,8 +164,77 @@ export class TideClient {
         },
       }),
     });
-    const body = await response.json() as { result?: { amount?: string } };
-    return body.result?.amount ?? '0';
+    if (!response.ok) {
+      throw new RpcError('Could not read the account balance.', response.status);
+    }
+    const body = await response.json() as {
+      result?: { amount?: string };
+      error?: { message?: string };
+    };
+    if (body.error || body.result?.amount === undefined) {
+      throw new RpcError(
+        body.error?.message ?? 'Could not read the account balance.',
+        response.status,
+      );
+    }
+    return body.result.amount;
+  }
+
+  private async tryView<T>(method: string, args: JsonObject = {}): Promise<ReadOutcome<T>> {
+    try {
+      return { value: await this.view<T>(method, args), failed: false };
+    } catch {
+      return { value: undefined, failed: true };
+    }
+  }
+
+  private async boatView(account: string): Promise<ReadOutcome<BoatView | null>> {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        return {
+          value: await this.view<BoatView | null>('get_boat', { account_id: account }),
+          failed: false,
+        };
+      } catch (error) {
+        const retryable = error instanceof RpcError
+          && (error.status === 429 || error.status >= 500);
+        if (!retryable || attempt > 0) return { value: undefined, failed: true };
+        await wait(500);
+      }
+    }
+    return { value: undefined, failed: true };
+  }
+
+  private async accountViewOutcome(account: string): Promise<ReadOutcome<string>> {
+    try {
+      return { value: await this.accountView(account), failed: false };
+    } catch {
+      return { value: undefined, failed: true };
+    }
+  }
+
+  private async boatViews(
+    accounts: string[],
+  ): Promise<Array<[string, ReadOutcome<BoatView | null>]>> {
+    const results: [string, ReadOutcome<BoatView | null>][] = [];
+    let next = 0;
+    const worker = async (): Promise<void> => {
+      while (next < accounts.length) {
+        const index = next;
+        next += 1;
+        const account = accounts[index];
+        results[index] = [account, await this.boatView(account)];
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.min(3, accounts.length) }, () => worker()),
+    );
+    return results;
+  }
+
+  private updateStale(failed: boolean): boolean {
+    this.failedRefreshes = failed ? this.failedRefreshes + 1 : 0;
+    return this.failedRefreshes >= 2;
   }
 
   async storageBalance(account: string): Promise<JsonObject | null> {
@@ -216,6 +311,25 @@ export class TideClient {
   }
 
   async refresh(): Promise<void> {
+    if (this.refreshTask) {
+      this.refreshQueued = true;
+      await this.refreshTask;
+      return;
+    }
+    const task = this.refreshOnce();
+    this.refreshTask = task;
+    try {
+      await task;
+    } finally {
+      this.refreshTask = null;
+      if (this.refreshQueued) {
+        this.refreshQueued = false;
+        void this.refresh();
+      }
+    }
+  }
+
+  private async refreshOnce(): Promise<void> {
     try {
       this.emit({ loading: true, error: '' });
       const sea = await this.view<SeaView>('get_sea');
@@ -231,6 +345,7 @@ export class TideClient {
         this.view<Indictment[]>('get_indictments', { cycle: Math.max(0, cycle - 1) }),
       ]);
       const discovered = [
+        ...(this.account ? [this.account] : []),
         ...accountList(indictments),
         ...accountList(previousIndictments),
         ...exiles.map((item) => item[0]),
@@ -238,25 +353,35 @@ export class TideClient {
         ...(assembly.last_result?.exiled ?? []),
       ];
       this.rememberKnown(discovered);
-      const boatEntries = await Promise.all(
-        [...this.known].map(async (account) => [
-          account,
-          await this.view<BoatView | null>('get_boat', { account_id: account })
-            .catch(() => null),
-        ] as const),
-      );
-      const boats = Object.fromEntries(boatEntries) as Record<string, BoatView | null>;
-      const playerBalance = this.account
-        ? asString(await this.view<string>('ft_balance_of', {
-          account_id: this.account,
-        }).catch(() => '0'))
-        : '0';
-      const playerStorage = this.account
-        ? await this.view<JsonObject | null>('storage_balance_of', {
-          account_id: this.account,
-        }).catch(() => null)
-        : null;
-      const nearBalance = this.account ? await this.accountView(this.account) : '0';
+      let failed = false;
+      const boats = { ...this.snapshot.boats };
+      let playerBalance = this.snapshot.playerBalance;
+      let playerStorage = this.snapshot.playerStorage;
+      let nearBalance = this.snapshot.nearBalance;
+      if (this.account) {
+        const account = this.account;
+        const [playerBoat, balance, storage, near] = await Promise.all([
+          this.boatView(account),
+          this.tryView<string>('ft_balance_of', { account_id: account }),
+          this.tryView<JsonObject | null>('storage_balance_of', { account_id: account }),
+          this.accountViewOutcome(account),
+        ]);
+        failed ||= playerBoat.failed || balance.failed || storage.failed || near.failed;
+        if (!playerBoat.failed) boats[account] = playerBoat.value;
+        if (!balance.failed) playerBalance = asString(balance.value);
+        if (!storage.failed) playerStorage = storage.value;
+        if (!near.failed) nearBalance = near.value;
+      } else {
+        playerBalance = '0';
+        playerStorage = null;
+        nearBalance = '0';
+      }
+      const otherAccounts = [...this.known].filter((account) => account !== this.account);
+      const boatEntries = await this.boatViews(otherAccounts);
+      boatEntries.forEach(([account, result]) => {
+        failed ||= result.failed;
+        if (!result.failed) boats[account] = result.value;
+      });
       const history = this.rememberHistory(
         sea.season,
         numberValue(asString(sea.stock_fish)),
@@ -275,11 +400,13 @@ export class TideClient {
         history,
         loading: false,
         error: '',
+        stale: this.updateStale(failed),
       });
     } catch (error) {
       this.emit({
         loading: false,
         error: error instanceof Error ? error.message : 'Could not read the live sea.',
+        stale: this.updateStale(true),
       });
     }
   }

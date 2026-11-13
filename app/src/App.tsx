@@ -15,7 +15,12 @@ import { SeasonTimeline } from './components/SeasonTimeline';
 import { NotificationStrip } from './components/NotificationStrip';
 import { Toasts } from './components/Toasts';
 import { WalletPanel } from './components/WalletPanel';
-import { loadTransactions, type RunAction, type Toast } from './components/shared';
+import {
+  loadTransactions,
+  markFaucetClaimed,
+  type RunAction,
+  type Toast,
+} from './components/shared';
 import './styles.css';
 
 type Route = 'sea' | 'harbour' | 'agora' | 'boat' | 'replay' | 'how';
@@ -44,6 +49,20 @@ function saveTransaction(result: TransactionResult, label: string): void {
     ...loadTransactions(),
   ].slice(0, 10);
   localStorage.setItem(`tide-transactions:${CONTRACT}`, JSON.stringify(list));
+}
+
+const ALREADY_CLAIMED_TOAST =
+  'You already claimed your test TIDE; it is in your wallet or your boat.';
+
+function toastErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : 'Transaction failed.';
+  if (/already claimed/i.test(message)) {
+    return ALREADY_CLAIMED_TOAST;
+  }
+  if (/doesn['’]t have enough balance/i.test(message)) {
+    return 'Not enough TIDE in your wallet for this.';
+  }
+  return message;
 }
 
 export default function App() {
@@ -99,10 +118,15 @@ export default function App() {
     const timer = window.setInterval(readEvents, 30_000);
     return () => { live = false; window.clearInterval(timer); };
   }, []);
+  const refresh = () => void client.refresh();
   const run: RunAction = (label, task) => {
     const id = Date.now() + Math.random();
     setToasts((items) => [...items, { id, kind: 'pending', text: `CONFIRM ${label} IN METAMASK…` }]);
     void task().then((result) => {
+      if (label === 'Claim faucet' && walletState.account) {
+        markFaucetClaimed(walletState.account);
+        refresh();
+      }
       if (result.hash) saveTransaction(result, label);
       setToasts((items) => items.map((item) => item.id === id
         ? {
@@ -112,16 +136,19 @@ export default function App() {
           ...(result.hash ? { result } : {}),
         }
         : item));
-    }).catch((error: unknown) => setToasts((items) => items.map((item) => item.id === id
-      ? {
-        ...item,
-        kind: 'error',
-        text: error instanceof Error ? error.message : 'Transaction failed.',
+    }).catch((error: unknown) => {
+      const message = toastErrorMessage(error);
+      if (label === 'Claim faucet' && message === ALREADY_CLAIMED_TOAST
+        && walletState.account) {
+        markFaucetClaimed(walletState.account);
+        refresh();
       }
-      : item)));
+      setToasts((items) => items.map((item) => item.id === id
+        ? { ...item, kind: 'error', text: message }
+        : item));
+    });
   };
   const connect = () => void wallet.connect().catch(() => undefined);
-  const refresh = () => void client.refresh();
   const disconnect = () => { void wallet.disconnect(); setPanel(false); };
   const content = route === 'sea'
     ? <PlayPage wallet={walletState} walletApi={wallet} snapshot={snapshot}

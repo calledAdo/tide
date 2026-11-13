@@ -25,6 +25,19 @@
   font: 800 9px JetBrains Mono;
 }
 
+.sea-heading-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.sea-stale {
+  padding: 4px 6px;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  font: 800 9px JetBrains Mono;
+}
+
 .dev-badge {
   color: var(--ink);
   background: var(--amber-bg);
