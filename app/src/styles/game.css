@@ -171,7 +171,14 @@
 .effort-slider-wrap { position: relative; min-width: 0; }
 .effort-slider-wrap input { display: block; width: 100%; margin: 17px 0 5px; accent-color: var(--signal); }
 .effort-panel.is-over .effort-slider-wrap input { accent-color: var(--amber); }
-.fair-tick { position: absolute; top: 13px; width: 3px; height: 18px; background: var(--marker); pointer-events: none; }
+.fair-tick {
+  position: absolute;
+  top: 13px;
+  width: 3px;
+  height: 18px;
+  background: var(--marker);
+  pointer-events: none;
+}
 .effort-scale { display: flex; justify-content: space-between; }
 .fair-label { margin: 7px 0 0; color: var(--fair); }
 .fuel-gauge {

@@ -164,13 +164,11 @@
   top: 9px;
   right: 9px;
   bottom: 9px;
-  display: flex;
-  width: 66px;
-  justify-content: space-between;
-  padding: 2px 0 2px 8px;
+  width: 124px;
+  padding: 2px 6px 2px 8px;
   border-left: 2px solid var(--ink);
-  font: 800 8px JetBrains Mono;
-  flex-direction: column;
+  font: 800 7px/1 JetBrains Mono;
+  pointer-events: none;
 }
 
 .depth-gauge i {
@@ -182,12 +180,37 @@
   background: var(--signal);
 }
 
-.gauge-top {
+.gauge-marker {
+  position: absolute;
+  right: 6px;
   color: var(--fair);
+  text-align: right;
+  white-space: nowrap;
+  transform: translateY(calc(-50% + var(--label-offset, 0px)));
 }
 
-.gauge-bottom {
+.gauge-marker::before {
+  position: absolute;
+  top: 3px;
+  left: -14px;
+  width: 8px;
+  height: 3px;
+  border: 1px solid var(--ink);
+  background: currentColor;
+  content: '';
+}
+
+.gauge-marker-capacity {
+  transform: translateY(var(--label-offset, 0px));
+}
+
+.gauge-marker-threshold {
   color: var(--danger);
+  transform: translateY(calc(-100% + var(--label-offset, 0px)));
+}
+
+.gauge-marker-sustainable {
+  color: var(--fair);
 }
 
 .death-stamp {

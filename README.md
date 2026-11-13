@@ -1,22 +1,27 @@
 # $TIDE
 
-A NEP-141 memecoin whose supply is a living fish stock: holders fish it into existence, can fish it to extinction, and police each other by Athenian ostracism.
+A NEP-141 memecoin whose supply is a living fish stock: holders fish it into existence, can fish it
+to extinction, and police each other by Athenian ostracism.
 
-[Play the live app](https://tidenear.astromind.cc/). In 30 seconds: connect MetaMask -> get gas and token registration automatically -> claim 100,000 TIDE -> build a boat -> fish -> vote.
-
-The `tide-near.vercel.app` alias remains available.
+[Play the live app](https://tidenear.astromind.cc/). In 30 seconds: connect MetaMask -> get gas and
+token registration automatically -> claim 100,000 TIDE -> build a boat -> fish -> vote.
 
 No MetaMask? [Watch the replay](https://tidenear.astromind.cc/#/replay).
 
-Track: `memecoins` (NEAR Hackathon 2026). License: MIT. Status: testnet; contract keyless after deployment.
+Track: `memecoins` (NEAR Hackathon 2026). License: MIT. Status: testnet; contract keyless after
+deployment.
 
 ## Try it in 30 seconds
 
 1. Open the [live app](https://tidenear.astromind.cc/).
-2. Connect MetaMask. The app creates or resumes a NEAR eth-implicit account, requests 0.5 testnet NEAR and token registration, and asks MetaMask to approve the relayer key.
-3. Claim the one-time 100,000 TIDE faucet, build a boat with at least 1,000 TIDE, fish, and vote during an assembly.
+2. Connect MetaMask. The app creates or resumes a NEAR eth-implicit account, requests 0.5 testnet
+   NEAR and token registration, and asks MetaMask to approve the relayer key.
+3. Claim the one-time 100,000 TIDE faucet, build a boat with at least 1,000 TIDE, fish, and vote
+   during an assembly.
 
-The [replay](https://tidenear.astromind.cc/#/replay) needs no wallet. For local checks, run `./scripts/check.sh`; it prints the two model tables, contract tests, the app simulation check, and `ALL CHECKS PASSED`.
+The [replay](https://tidenear.astromind.cc/#/replay) needs no wallet. For local checks, run
+`./scripts/check.sh`; it prints the three model tables, contract tests, the app simulation check,
+and `ALL CHECKS PASSED`.
 
 ### Testing the app locally
 
@@ -36,37 +41,39 @@ localStorage.setItem('tide-dev-account', '<account>');
 localStorage.setItem('tide-chip-key:<account>', '<ed25519-secret-key>');
 ```
 
-The secret must correspond to a function-call key on the contract account, and is never stored in this
-repository. Fishing, voting, shards, staking, unstaking, and tick can then be tested without wallet popups.
+The secret must correspond to a function-call key on the contract account, and is never stored in
+this repository. Fishing, voting, shards, staking, unstaking, and tick can then be tested without
+wallet popups.
 Registration, the faucet, and MetaMask setup remain wallet-only actions in dev mode.
 
-## Live on testnet
+## The three seas
 
-The deployed testnet contract is `sea.tide-fund-94145.testnet`, a keyless generation 0 sea with a
-1,000,000-fish carrying capacity. Watch it in the
-[NEARBlocks explorer][live-explorer].
+| Contract | Role |
+| --- | --- |
+| `tide-1794517191.memethis-t40-demo.testnet` | **Generation 0, DEAD.** |
+| | Collapsed on day 1103 under demo bots that fished about 77,500 fish a season against 73,155 of
+| | growth. Kept as the exhibit. |
+| `sea-1794591365.tide-sponsor-53394.testnet` | Retired. |
+| | A healthy replacement, superseded when THE RECKONING shipped. No longer used. |
+| `sea.tide-fund-94145.testnet` | **Live.** Keyless, generation 0, with THE RECKONING. |
+| | This is what the app talks to. |
 
-It has **no access keys**. Verify with:
+The live sea has a 1,000,000-fish carrying capacity. Watch it in the
+[NEARBlocks explorer][live-explorer]. It has **no access keys**; verify with:
 
 ```bash
 near account list-keys sea.tide-fund-94145.testnet network-config testnet now
 ```
 
-Seasons are 60 seconds. The new sea is keyless and is kept alive by six demo bots run by the
-sponsor service.
-
-The old demo sequence remains on the first sea's chain as historical evidence. The new bots fish
-within the sea's growth and stop entirely below twice the point of no return; human players are not
-limited.
+Seasons are 60 seconds, and six demo bots keep the live sea moving. They fish within the sea's
+growth and stop entirely below twice the point of no return; human players are not limited.
 
 ## The first sea died
 
-The first `$TIDE` sea is dead. Its contract was `tide-1794517191.memethis-t40-demo.testnet`; the
-live v2 sea is `sea.tide-fund-94145.testnet`. Six demo captains fished it a little
-harder than it could regrow, about 77,500 fish a season against 73,155 of growth. The gap
-compounded, the stock crossed the point of no return, and on day 1103 the contract stopped minting
-for ever. Its final stock was 28. Nothing can restart it: the rule is in the contract and the
-contract has no keys.
+The first `$TIDE` sea is dead. Six demo captains fished it a little harder than it could regrow.
+The gap compounded, the stock crossed the point of no return, and on day 1103 the contract stopped
+minting for ever. Its final stock was 28. Nothing can restart it: the rule is in the contract and
+the contract has no keys.
 
 That is the whole thesis, demonstrated on a public chain rather than in a simulation.
 
@@ -85,9 +92,12 @@ What happened on the first sea, from `scripts/demo.sh`:
 - Season 18: six boats staked.
 - Season 19: five boats fished their fair share; greedy fished at full effort and was indicted.
 - Season 20: the assembly voted 5-1 to hold an ostracism, and three shards named greedy.
-- Season 21: greedy was exiled. Its `fish` and `ft_transfer` calls failed with `Smart contract panicked: EXILED until season 31`.
+- Season 21: greedy was exiled. Its `fish` and `ft_transfer` calls failed with
+  `Smart contract panicked: EXILED until season 31`.
 
-Seasons keep running after the demo, so by the time you read this the exile has ended and greedy is back at sea (exile is temporary by design). The record stays on chain: the `indicted`, `assembly_closed` and `exiled` events are in the contract's transaction history in the explorer.
+Seasons keep running after the demo, so by the time you read this the exile has ended and greedy is
+back at sea (exile is temporary by design). The record stays on chain: the `indicted`,
+`assembly_closed` and `exiled` events are in the contract's transaction history in the explorer.
 
 To watch the live sea, open the [live app](https://tidenear.astromind.cc/). It is configured for
 `sea.tide-fund-94145.testnet`, and its history is kept in your browser and grows one
@@ -97,42 +107,71 @@ The public RPC rate-limits bursts of view calls; `demo.sh` retries its polling a
 
 ## The app
 
-**PLAY** is the live sea and the command deck. The command deck is a state machine: connect and set up the account, claim the faucet, build a boat, then preview effort and fish once per season. During an assembly, the assembly takeover replaces the normal action with the hold vote or shard-writing action. Below the sea are FLEET, ASSEMBLY, and LOG tabs for the known boats, current and previous assembly state, and local transaction history.
+**PLAY** is the live sea and the command deck. The command deck is a state machine: connect and set
+up the account, claim the faucet, build a boat, then preview effort and fish once per season. During
+an assembly, the takeover replaces the normal action with the hold vote or shard-writing action.
+Below the sea are FLEET, ASSEMBLY, and LOG tabs for known boats, assembly state, and local history.
 
-**REPLAY** runs the four simulation scenarios without a wallet, with play, pause, restart, speed, chart, fleet, assembly, log, and the dead-sea stamp.
+**REPLAY** runs four simulation scenarios without a wallet, with play, pause, restart, speed, chart,
+fleet, assembly, log, and the dead-sea stamp.
 
 **HOW IT WORKS** presents the five rules, live contract parameters, the generation ledger, and the
 NEAR rationale.
 
-The wallet side panel shows the full address, NEAR and TIDE balances, deposit instructions with a QR code, GET TEST NEAR and faucet actions, TIDE and NEAR withdrawal forms, your boat state and controls, the last ten local transactions, and disconnect. Its MetaMask flow and side-panel structure follow the author's other NEAR app, `meme-this-near`.
+The wallet side panel shows the full address, NEAR and TIDE balances, deposit instructions with a QR
+code, GET TEST NEAR and faucet actions, TIDE and NEAR withdrawal forms, your boat state and controls,
+the last ten local transactions, and disconnect. Its MetaMask flow and side-panel structure follow
+the author's other NEAR app, `meme-this-near`.
 
 ## MetaMask on NEAR
 
-MetaMask supplies a NEAR **eth-implicit account**, displayed as a 40-character `0x` address. The app switches MetaMask to the NEAR testnet EVM chain, chain `398`, at `https://eth-rpc.testnet.near.org`.
+MetaMask supplies a NEAR **eth-implicit account**, displayed as a 40-character `0x` address. The
+app switches MetaMask to the NEAR testnet EVM chain, chain `398`, at
+`https://eth-rpc.testnet.near.org`.
 
-On first connection, the sponsor service onboards the account with 0.5 testnet NEAR for gas and registers it with the TIDE token. The app then asks MetaMask to approve the relayer's limited `rlp_execute` key on the account. That approval enables NEAR Wallet Selector's `ethereum-wallets` module to submit contract actions, but every action still requires a MetaMask confirmation.
+On first connection, the sponsor service onboards the account with 0.5 testnet NEAR for gas and
+registers it with the TIDE token. The app then asks MetaMask to approve the relayer's limited
+`rlp_execute` key on the account. That approval enables NEAR Wallet Selector's `ethereum-wallets`
+module to submit contract actions, but every action still requires a MetaMask confirmation.
 
-The app is served from a custom domain because MetaMask's scanner flags free-hosting subdomains. API calls go through `/api` on the same domain.
+The app is served from a custom domain because MetaMask's scanner flags free-hosting subdomains. API
+calls go through `/api` on the same domain.
 
-Onboarding is limited to once per account per 24 hours, five accounts per client IP per 24 hours, and the configured daily sponsor cap. The service can return an already-funded account without funding it again.
+Onboarding is limited to once per account per 24 hours, five accounts per client IP per 24 hours,
+and the configured daily sponsor cap. The service can return an already-funded account without
+funding it again.
 
 ## Server (VPS)
 
-The [`server/`](server/) Node 22 service is deployed at https://tide.204-48-27-245.sslip.io. `GET /health` reports the contract, sponsor balance, seasons behind, keeper state, and onboarding count. `POST /testnet/onboard` funds an eth-implicit account up to 0.5 testnet NEAR and registers it with TIDE.
+The [`server/`](server/) Node 22 service sits behind the app's `/api` path. `GET /health` reports the
+contract, sponsor balance, seasons behind, keeper state, and onboarding count. `POST /testnet/onboard`
+funds an eth-implicit account up to 0.5 testnet NEAR and registers it with TIDE.
 
-The keeper polls the sea and sends `tick` when more than 30 seasons are unsettled. The service is deployed with systemd and exposed through Caddy. See [`server/README.md`](server/README.md) for environment variables, limits, and deployment commands.
+The keeper polls the sea and sends `tick` when more than 30 seasons are unsettled. The service is
+deployed with systemd and exposed through Caddy. See [`server/README.md`](server/README.md) for
+environment variables, limits, and deployment commands.
 
 ## The mechanic
 
-1. The sea is unminted supply `S`. It starts at 700,000 fish and grows once per season under `g(S) = r * S * (1 - S/K) * (S - A) / K`. Below the Allee threshold `A`, growth is negative and the stock moves toward extinction.
-2. Holders stake TIDE as boats. A boat built or topped up in season `s` can first fish in `s + 1`. Catch uses the opening stock and the opening fleet snapshot, so transaction order within a season does not change catch.
-3. Fishing burns fuel: `FUEL * stake * effort`, where full effort is 10,000 basis points. The whole fleet at full effort can take at most 25% of the opening stock.
-4. A boat's fair share is `quota * stake / fleet`. The quota is 80% of maximum sustainable yield. The quota is not enforced: a boat may fish harder, but catch above fair share is recorded as a public indictment for that assembly cycle.
-5. Every third season is an assembly. In stage 1, eligible boats answer whether to hold an ostracism. It passes only when yes votes are more than half of eligible boats.
-6. In stage 2, each eligible boat writes one to three NEAR account names on a shard. A name written by at least 40% of eligible boats is exiled when the season closes.
-7. Exile lasts 10 seasons. The exiled boat cannot fish, unstake, transfer, or vote. Its TIDE is not confiscated.
-8. An exiled boat's stake remains in the fleet denominator, so its unused quota share stays in the sea rather than being redistributed to the boats that named it.
-9. There is no owner, administrator, parameter setter, or cron job. Any call or `tick` settles elapsed seasons, up to 40 per call. Deployment deletes every access key from the contract account.
+1. The sea is unminted supply `S`. It starts at 700,000 fish and grows once per season under
+   `g(S) = r * S * (1 - S/K) * (S - A) / K`. Below the Allee threshold `A`, growth is negative
+   and the stock moves toward extinction.
+2. Holders stake TIDE as boats. A boat built or topped up in season `s` can first fish in `s + 1`.
+   Catch uses the opening stock and fleet snapshot, so transaction order does not change catch.
+3. Fishing burns fuel: `FUEL * stake * effort`, where full effort is 10,000 basis points. The
+   whole fleet at full effort can take at most 25% of the opening stock.
+4. A boat's fair share is `quota * stake / fleet`. The quota is 80% of maximum sustainable yield.
+   It is not enforced: catch above fair share is recorded as a public indictment for that assembly.
+5. Every third season is an assembly. In stage 1, eligible boats answer whether to hold an
+   ostracism. It passes only when yes votes are more than half of eligible boats.
+6. In stage 2, each eligible boat writes one to three NEAR account names on a shard. A name written
+   by at least 40% of eligible boats is exiled when the season closes.
+7. Exile lasts 10 seasons. The exiled boat cannot fish, unstake, transfer, or vote. Its TIDE is
+   not confiscated.
+8. An exiled boat's stake remains in the fleet denominator, so its unused quota share stays in the
+   sea rather than being redistributed to the boats that named it.
+9. There is no owner, administrator, parameter setter, or cron job. Any call or `tick` settles up
+   to 40 elapsed seasons. Deployment deletes every access key from the contract account.
 
 The values below are compile-time constants from `contract/src/sea.rs`; the contract has no setter.
 
@@ -164,19 +203,19 @@ The values below are compile-time constants from `contract/src/sea.rs`; the cont
 
 ## Why these parameters: the simulation
 
-`python3 sim/tide_sim.py` prints:
+`python3 sim/tide_sim.py` prints results including:
 
 ```text
 MSY stock 689,000  MSY/season 73,155  quota 58,524
-scenario                                                   final stock below Allee@ fisher APR exiles wrong faction edge
-10% staked: open access (5 greedy, 15 cond. coop.)                  78            9     +20.6%      0     0
-10% staked: TIDE, same crowd + ostracism                       931,909         None    +178.7%     50     0             
-50% staked: open access (5 greedy, 15 cond. coop.)             435,206         None      +2.0%      0     0             
-50% staked: TIDE, same crowd + ostracism                       931,909         None     +21.4%     50     0             
-50% staked: benchmark, everyone keeps quota                    896,332         None     +23.3%      0     0             
-50%: 30% faction, NAIVE rules (1-stage, redistribute)          896,332         None     +23.3%    120   120        3.44x
-50%: 30% faction, TIDE rules (2-stage, share to sea)           896,332         None     +23.3%      0     0        1.00x
-10% staked: all greedy + ostracism (no honest majority)             37            8     +18.9%      0     0
+scenario | final stock | below Allee@ | fisher APR | exiles | wrong faction | edge
+10% staked: open access | 78 | 9 | +20.6% | 0 | 0
+10% staked: TIDE, same crowd + ostracism | 931,909 | None | +178.7% | 50 | 0
+50% staked: open access | 435,206 | None | +2.0% | 0 | 0
+50% staked: TIDE, same crowd + ostracism | 931,909 | None | +21.4% | 50 | 0
+50% staked: benchmark, everyone keeps quota | 896,332 | None | +23.3% | 0 | 0
+50%: 30% faction, NAIVE rules | 896,332 | None | +23.3% | 120 | 120 | 3.44x
+50%: 30% faction, TIDE rules | 896,332 | None | +23.3% | 0 | 0 | 1.00x
+10% staked: all greedy | 37 | 8 | +18.9% | 0 | 0
 ```
 
 `python3 sim/tide_supply.py` prints:
@@ -194,30 +233,77 @@ genesis 100,000,000  quota/season 58,524  (21.4%/yr gross if fully fished)
     90%    greedy          +0.3%       +1.4%   25,476,019   25,130,674    645,389   None
 ```
 
-- Lawless fishing at 10% staked crosses the point of no return on day 9; the governed run survives with 50 exiles and 0 wrongful ones.
-- At 50% staked, the governance run pays +21.4% APR versus +2.0% for lawless fishing. The separate one-year supply model rounds its quota row to +21.5%.
-- The naive one-stage, share-redistribution rules let a 30% faction exile 120 honest boats and earn 3.44x. The two-stage vote blocks a minority faction, while returning the share to the sea removes the direct profit from a majority faction.
-- The all-greedy case is the honest limit: no institution saves a community with no honest majority.
-- The first design, one exile per 5 seasons, collapsed in simulation because one punishment could not keep up with five cheaters. Ballots therefore carry up to 3 names and assemblies meet every 3 seasons.
+`python3 sim/tide_reckoning.py` prints the wreck, reseed, capacity-decay,
+recovery-tax, and loss-versus-grab trace described below.
 
-The model is a re-runnable design input, not a price forecast. It uses the v2 fleet cap and fuel burn; the governance model and supply model are separate experiments with the same sea constants.
+- Lawless fishing at 10% staked crosses the point of no return on day 9; the governed run survives
+  with 50 exiles and 0 wrongful ones.
+- At 50% staked, the governance run pays +21.4% APR versus +2.0% for lawless fishing. The
+  separate one-year supply model rounds its quota row to +21.5%.
+- The naive one-stage, share-redistribution rules let a 30% faction exile 120 honest boats and earn
+  3.44x. The two-stage vote blocks a minority faction, while returning the share to the sea removes
+  the direct profit from a majority faction.
+- The all-greedy case is the honest limit: no institution saves a community with no honest majority.
+- The first design, one exile per 5 seasons, collapsed in simulation because one punishment could
+  not keep up with five cheaters. Ballots therefore carry up to 3 names and assemblies meet every
+  3 seasons.
+
+The model is a re-runnable design input, not a price forecast. It uses the current fleet cap and
+fuel burn; the governance model and supply model are separate experiments with the same sea constants.
+
+## THE RECKONING
+
+Terminal death was the wrong ending for a shared sea. A finite horizon unravels cooperation: when
+the last raid is also the last chance to collect, the old rules reward racing to grab what remains.
+THE RECKONING makes collapse costly enough that pulling back can remain rational.
+
+It has four layers:
+
+1. A wreck burns half of every boat's stake and returns the other half to its wallet.
+2. A funded reseed decays capacity by 20% each generation while the point of no return stays fixed
+   at 120,000 fish.
+3. A reseed costs 1,000,000 burned TIDE and must be funded within 60 seasons. After the deadline,
+   the sea returns through a poor fallback at the larger of 240,000 fish or 30% of its new capacity.
+4. For 30 recovery seasons, half of every catch is burned as a recovery tax.
+
+The reckoning model's evidence is the loss/grab ratio for the raider:
+
+| Opening stock | Wreck loss versus final grab |
+| ---: | ---: |
+| 700,000 fish | 265x |
+| 300,000 fish | 618x |
+| 120,000 fish, the line | 1,545x |
+| Across three generations | 978x |
+
+The endgame therefore flips from racing to grab into pulling back. The honest limit is deliberate:
+the wreck also burns boats that fished fairly. That collective liability is why the fleet must
+police itself, and why a dominant overfisher cannot grief the community cheaply.
 
 ## Tokenomics
 
-TIDE is minted as catch when `fish` is called, at genesis balances during initialization, and by the fixed testnet faucet when a deployment sets a nonzero faucet amount. The catch is accounted against the sea when its season closes. TIDE is burned as fishing fuel, as 1% of a stake deposit when a boat is built, and as 1 TIDE per name written on a shard. Exile burns and confiscates nothing.
+TIDE is minted as catch when `fish` is called, at genesis, and by the fixed testnet faucet when a
+deployment sets a nonzero amount. Catch is accounted against the sea when its season closes. TIDE
+is burned as fishing fuel, as 1% of a stake deposit, and as 1 TIDE per shard name. Exile burns and
+confiscates nothing.
 
-Inflation falls as staking rises because fuel burn rises with fleet size: in the one-year supply table, quota-keeping net supply change falls from +17.0% at 20% staked to +3.0% at 90%. Unstaked holders are diluted by catch in the same basic way that non-staking NEAR holders are diluted by staking issuance. No price is promised.
+Inflation falls as staking rises because fuel burn rises with fleet size: in the one-year supply
+table, quota-keeping net supply change falls from +17.0% at 20% staked to +3.0% at 90%. Unstaked
+holders are diluted by catch in the same basic way that non-staking NEAR holders are diluted by
+staking issuance. No price is promised.
 
 ## Deploy your own (testnet)
 
-Prerequisites are Rust, `cargo-near`, near-cli-rs 0.31, and a funded testnet account whose key is in the legacy keychain. Run:
+Prerequisites are Rust, `cargo-near`, near-cli-rs 0.31, and a funded testnet account whose key is
+in the legacy keychain. Run:
 
 ```bash
 MASTER=you.testnet ./scripts/deploy-testnet.sh
 ./scripts/demo.sh
 ```
 
-The default funding is `CONTRACT_FUND="3.5 NEAR"` for the contract and `BOAT_FUND="0.5 NEAR"` for each of the six demo accounts, for a total of approximately 6.5 NEAR before gas. Set either variable when running the deploy script if your account needs a different allocation.
+The default funding is `CONTRACT_FUND="3.5 NEAR"` for the contract and `BOAT_FUND="0.5 NEAR"` for
+each of the six demo accounts, for approximately 6.5 NEAR before gas. Set either variable when
+running the deploy script if your account needs a different allocation.
 
 The deploy script builds `contract/target/near/tide.wasm`, creates and seeds the contract plus six
 demo accounts, initializes the contract, deletes all contract access keys, and writes
@@ -231,7 +317,7 @@ sequence and uses placeholder account IDs when `.env.demo` is absent.
 
 | Method | Type | Purpose |
 | --- | --- | --- |
-| `new(genesis, season_len_sec, faucet_amount)` | change/init | Initialize balances, clock, sea, and optional faucet. |
+| `new(genesis, season_len_sec, faucet_amount)` | change/init | Initialize balances, clock, sea, and faucet. |
 | `tick()` | change | Settle elapsed seasons and assemblies. |
 | `stake(amount)` | change | Build or top up a boat; burns 1% and starts next season. |
 | `unstake(amount)` | change | Return staked TIDE unless exile or an open indictment blocks it. |
@@ -248,25 +334,27 @@ sequence and uses placeholder account IDs when `.env.demo` is absent.
 | `get_exiles()` | view | Return exiled account names and release seasons. |
 | `get_reckoning()` | view | Return phase, reseed drive, contributors, and history. |
 | `ft_transfer(receiver_id, amount, memo)` | change | NEP-141 transfer; exiled senders are blocked. |
-| `ft_transfer_call(receiver_id, amount, memo, msg)` | change | NEP-141 transfer-and-call; exiled senders are blocked. |
+| `ft_transfer_call(receiver_id, amount, memo, msg)` | change | NEP-141 transfer-and-call; exile blocked. |
 | `ft_total_supply()` | view | Return total TIDE supply. |
 | `ft_balance_of(account_id)` | view | Return an account's TIDE balance. |
-| `storage_deposit(account_id, registration_only)` | payable change | Register an account for NEP-141 storage. |
+| `storage_deposit(account_id, registration_only)` | payable change | Register NEP-141 storage. |
 | `storage_withdraw(amount)` | payable change | Withdraw available storage balance. |
 | `storage_unregister(force)` | payable change | Unregister an account with no staked boat. |
 | `storage_balance_bounds()` | view | Return the NEP-145 storage bounds. |
 | `storage_balance_of(account_id)` | view | Return an account's storage balance. |
 | `ft_metadata()` | view | Return TIDE's NEP-148 metadata. |
-| `ft_resolve_transfer(...)` | private callback | Resolve `ft_transfer_call`; callable only by the contract runtime. |
+| `ft_resolve_transfer(...)` | private callback | Resolve `ft_transfer_call` in the runtime. |
 
 ## Honest limits
 
-- Voting is one vote per boat, with a minimum stake of 1,000 TIDE and a one-season age requirement. A whale that splits early across accounts gains votes.
+- Voting is one vote per boat, with a minimum stake of 1,000 TIDE and a one-season age requirement.
+  A whale that splits early across accounts gains votes.
 - With no honest majority, there is no rescue.
 - A wreck burns half of every boat's stake, including boats that fished fairly, and returns the
   other half to each wallet. This deliberate collective liability is why the fleet must police
   itself; catch is proportional to stake, so sinking the sea costs a dominant overfisher most.
-- A freshly funded new boat can still be built by an exiled owner from another account. It costs 1% and requires fresh capital.
+- A freshly funded new boat can still be built by an exiled owner from another account. It costs 1%
+  and requires fresh capital.
 - Seasons settle lazily, at most 40 per call; the page blocks actions only when more than 40 seasons are
   unsettled. A keeper may call `tick` periodically to keep the sea current; anyone can call `tick`.
 - Views project unsettled seasons but do not replay assemblies. Call `tick` to settle an assembly on chain.
@@ -274,28 +362,37 @@ sequence and uses placeholder account IDs when `.env.demo` is absent.
 - The live page supports wallet actions; the CLI remains useful for independent contract inspection.
 - The testnet faucet exists only on deployments initialized with a nonzero faucet amount.
 - The sponsor holds testnet NEAR and can run dry; onboarding refuses to operate below 1 NEAR.
-- The keeper is a convenience process run by the author's VPS. The contract does not depend on it; anyone can call `tick`.
+- The keeper is a convenience process run by the author's VPS. The contract does not depend on it;
+  anyone can call `tick`.
 - MetaMask players confirm every action in MetaMask. There is no one-tap signing for eth-implicit accounts.
 - The dev signer is localhost-only.
 - Nothing is audited.
 
 ## Why NEAR
 
-NEAR account names make a shard readable: `write_shard(["greedy.near"])` names a person-sized account rather than a hex address. The contract can be keyless after deployment, and per-season transactions are inexpensive enough for the ritual. TIDE uses NEP-141 and emits NEP-297-style event records for each mint, burn, indictment, and exile.
+NEAR account names make a shard readable: `write_shard(["greedy.near"])` names a person-sized
+account rather than a hex address. The contract can be keyless after deployment, and per-season
+transactions are inexpensive enough for the ritual. TIDE uses NEP-141 and emits NEP-297-style
+event records for each mint, burn, indictment, and exile.
 
 ## Research behind it
 
-Gordon (1954); Schaefer (1954); Hardin (1968); Ostrom (1990); Fehr & Gachter (2000); Levhari & Mirman (1980); Forsdyke (2005), including ostracism and Hyperbolus in 417 BC.
+Gordon (1954); Schaefer (1954); Hardin (1968); Ostrom (1990); Fehr & Gachter (2000); Levhari &
+Mirman (1980); Forsdyke (2005), including ostracism and Hyperbolus in 417 BC.
 
 ## Built with
 
-React 19, Vite 8, NEAR Wallet Selector 10 (`ethereum-wallets`), wagmi/viem, near-api-js 7, and server-side Node 22.
+React 19, Vite 8, NEAR Wallet Selector 10 (`ethereum-wallets`), wagmi/viem, near-api-js 7, and
+server-side Node 22.
 
 The contract uses near-sdk 5.30.1, near-contract-standards, cargo-near, and near-cli-rs.
 
-Big Shoulders Display, Inter Tight, and JetBrains Mono, bundled locally under `app/public/fonts/` and licensed under the SIL Open Font License 1.1. The app's visual style is an editorial/brutalist theme shared with the author's other NEAR app. Briefs 01-19 are in `briefs/`.
+Big Shoulders Display, Inter Tight, and JetBrains Mono are bundled locally under
+`app/public/fonts/` and licensed under the SIL Open Font License 1.1. The app's visual style is an
+editorial/brutalist theme shared with the author's other NEAR app. Briefs 01-33 are in `briefs/`.
 
-Design, simulation and specs by the author with Claude Code; implementation tasks delegated to OpenAI Codex (gpt-5.6-luna) from written briefs in `briefs/`, reviewed and tested by the author. All code was written during the hackathon (from 2026-11-12).
+Design, specifications, and review by the author with Claude Code; implementation delegated to
+Codex from those briefs. All code was written during the hackathon (from 2026-11-12).
 
 ## Repository layout
 
@@ -309,21 +406,61 @@ Design, simulation and specs by the author with Claude Code; implementation task
 │   ├── package-lock.json # Locked app dependencies
 │   ├── package.json # App dependencies and scripts
 │   ├── public/fonts/README.md # Font inventory and license
-│   ├── public/fonts/*.woff2 # Bundled Big Shoulders Display, Inter Tight, JetBrains Mono
+│   ├── public/fonts/big-shoulders-display-latin-800-normal.woff2 # Bundled display font
+│   ├── public/fonts/big-shoulders-display-latin-900-normal.woff2 # Bundled display font
+│   ├── public/fonts/inter-tight-latin-400-normal.woff2 # Bundled sans font
+│   ├── public/fonts/inter-tight-latin-600-normal.woff2 # Bundled sans font
+│   ├── public/fonts/inter-tight-latin-700-normal.woff2 # Bundled sans font
+│   ├── public/fonts/jetbrains-mono-latin-400-normal.woff2 # Bundled mono font
+│   ├── public/fonts/jetbrains-mono-latin-700-normal.woff2 # Bundled mono font
+│   ├── public/fonts/jetbrains-mono-latin-800-normal.woff2 # Bundled mono font
+│   ├── public/vercel.json # Deployment headers
 │   ├── scripts/check-sim.cjs # Replay simulation check
 │   ├── src/App.tsx # App shell and routes
-│   ├── src/components/* # React app components
+│   ├── src/components/AgoraPage.tsx # Agora page
+│   ├── src/components/AssemblyBar.tsx # Assembly status bar
+│   ├── src/components/AssemblyTab.tsx # Assembly tab
+│   ├── src/components/AssemblyTakeover.tsx # Assembly actions
+│   ├── src/components/BoatPage.tsx # Boat page
+│   ├── src/components/CaptainCard.tsx # Captain detail
+│   ├── src/components/Console.tsx # Command console
+│   ├── src/components/FishSea.tsx # Sea visualization
+│   ├── src/components/FleetTab.tsx # Fleet tab
+│   ├── src/components/HarbourPage.tsx # Harbour page
+│   ├── src/components/HowPage.tsx # Rules and parameters
+│   ├── src/components/LogTab.tsx # Transaction log tab
+│   ├── src/components/PlayPage.tsx # Play page
+│   ├── src/components/ProjectionPanel.tsx # Catch projection
+│   ├── src/components/ReckoningPanel.tsx # Reckoning actions
+│   ├── src/components/ReplayPage.tsx # Replay page
+│   ├── src/components/SeaHealth.tsx # Sea health panel
+│   ├── src/components/SeaReadout.tsx # Sea readout
+│   ├── src/components/SeasonTimeline.tsx # Season timeline
+│   ├── src/components/Toasts.tsx # Notifications
+│   ├── src/components/TopBar.tsx # App navigation
+│   ├── src/components/WalletPanel.tsx # Wallet panel
+│   ├── src/components/YourDay.tsx # Fishing controls
+│   ├── src/components/shared.ts # Shared component helpers
 │   ├── src/config.ts # Contract and service configuration
 │   ├── src/lib/format.test.ts # Formatting tests
 │   ├── src/lib/format.ts # Formatting helpers
 │   ├── src/main.tsx # React entrypoint
+│   ├── src/near/bots.ts # Demo bot data
+│   ├── src/near/history.ts # Transaction history
+│   ├── src/near/registration.ts # Token registration
 │   ├── src/near/tide.ts # Contract client
 │   ├── src/near/types.ts # Contract types
 │   ├── src/near/wallet.ts # MetaMask wallet
+│   ├── src/polyfills.ts # Browser polyfills
+│   ├── src/routes/AgoraRoute.tsx # Agora route
+│   ├── src/routes/BoatRoute.tsx # Boat route
+│   ├── src/routes/HarbourRoute.tsx # Harbour route
+│   ├── src/routes/SeaRoute.tsx # Sea route
 │   ├── src/sim/engine.ts # Replay adapter
 │   ├── src/sim/sim.js # Replay simulation engine
 │   ├── src/styles.css # App styles
 │   ├── src/styles/console.css # Console styles
+│   ├── src/styles/game.css # Game styles
 │   ├── src/styles/how.css # How-it-works styles
 │   ├── src/styles/layout.css # Layout styles
 │   ├── src/styles/panel.css # Wallet panel styles
@@ -359,7 +496,35 @@ Design, simulation and specs by the author with Claude Code; implementation task
 │   ├── 18b-app-review-fixes.md # App review fixes brief
 │   ├── 18c-preview-units-fish.md # Preview units brief
 │   ├── 18d-dev-signer-votes.md # Dev signer brief
-│   └── 19-readme-and-cleanup.md # README and cleanup brief
+│   ├── 18e-metamask-detection.md # MetaMask detection brief
+│   ├── 18f-already-connected.md # Already-connected brief
+│   ├── 18g-buffer-polyfill.md # Buffer polyfill brief
+│   ├── 19-readme-and-cleanup.md # README and cleanup brief
+│   ├── 20-custom-domain.md # Custom domain brief
+│   ├── 21-indexer.md # Indexer brief
+│   ├── 21b-real-block-shape.md # Real block shape brief
+│   ├── 21c-fastnear-tx-source.md # FastNear transaction source brief
+│   ├── 21d-dedupe.md # Deduplication brief
+│   ├── 21e-dedupe-identity.md # Deduplication identity brief
+│   ├── 21f-active-assemblies.md # Active assemblies brief
+│   ├── 21g-gap-free-paging.md # Gap-free paging brief
+│   ├── 22-redesign.md # Redesign brief
+│   ├── 22b-redesign-review.md # Redesign review brief
+│   ├── 22c-claim-state.md # Claim state brief
+│   ├── 22d-polling-resilience.md # Polling resilience brief
+│   ├── 23-bot-captains.md # Bot captains brief
+│   ├── 24-sea-boat-agora-split.md # Sea, boat, and Agora split brief
+│   ├── 24b-polish.md # Polish brief
+│   ├── 25-sustainable-bots.md # Sustainable bot brief
+│   ├── 25b-simple-safe-bots.md # Simple safe bot brief
+│   ├── 26-new-sea-and-exhibit.md # New sea and exhibit brief
+│   ├── 27-effort-and-ready.md # Effort and ready brief
+│   ├── 28-the-reckoning.md # Reckoning brief
+│   ├── 29-reckoning-ui.md # Reckoning UI brief
+│   ├── 30-server-reckoning.md # Server reckoning brief
+│   ├── 31-faucet-registration.md # Faucet registration brief
+│   ├── 32-bot-stage-race.md # Bot stage race brief
+│   └── 33-final-polish.md # Final polish brief
 ├── contract/ # NEAR smart contract
 │   ├── Cargo.lock # Locked Rust dependencies
 │   ├── Cargo.toml # Rust package metadata
@@ -378,16 +543,25 @@ Design, simulation and specs by the author with Claude Code; implementation task
 │   ├── deploy/tide-api.service # systemd service
 │   ├── package-lock.json # Locked server dependencies
 │   ├── package.json # Server dependencies and scripts
+│   ├── src/bots.js # Demo bot service
 │   ├── src/config.js # Service configuration
 │   ├── src/index.js # HTTP service
+│   ├── src/indexer.js # Indexer
 │   ├── src/keeper.js # Keeper loop
 │   ├── src/near.js # NEAR client
 │   ├── src/onboard.js # Account onboarding
 │   ├── src/ratelimit.js # Onboarding limits
 │   ├── test/config.test.js # Configuration tests
+│   ├── test/fixtures/real-account-txs.json # Indexer fixture
+│   ├── test/fixtures/real-block-fish.json # Indexer fixture
+│   ├── test/fixtures/real-transactions-fish.json # Indexer fixture
+│   ├── test/bots.test.js # Bot tests
+│   ├── test/index.test.js # HTTP tests
+│   ├── test/indexer.test.js # Indexer tests
 │   ├── test/keeper.test.js # Keeper tests
 │   └── test/onboard.test.js # Onboarding tests
 └── sim/ # Supply and fishery simulations
+    ├── tide_reckoning.py # Reckoning sim
     ├── tide_runs.csv # Simulation run data
     ├── tide_sim.py # Governance simulation
     ├── tide_stock.png # Stock chart raster

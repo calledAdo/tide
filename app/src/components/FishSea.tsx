@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import type { SeaView, TideSnapshot } from '../near/types';
 import { asString, boatHasStake } from '../near/types';
 import { CONTRACT } from '../config';
@@ -15,6 +16,53 @@ type Props = {
 
 function tier(stake: number): 'dinghy' | 'trawler' | 'factory' {
   return stake >= 1_000_000e18 ? 'factory' : stake >= 50_000e18 ? 'trawler' : 'dinghy';
+}
+
+function gaugeDepth(stock: number, capacity: number): number {
+  if (!Number.isFinite(stock)) return 0;
+  return Math.max(0, Math.min(100, 100 - stock / capacity * 100));
+}
+
+type GaugeMarker = {
+  key: 'capacity' | 'sustainable' | 'threshold';
+  label: string;
+  value: number;
+  depth: number;
+  offset: number;
+};
+
+function layoutGaugeMarkers(markers: Omit<GaugeMarker, 'offset'>[], height: number): GaugeMarker[] {
+  const markerHeight = 10;
+  const minimumGap = 14;
+  const minimumCenter = markerHeight / 2;
+  const maximumCenter = Math.max(minimumCenter, height - minimumCenter);
+  const desiredCenters = markers.map((marker) => {
+    const point = marker.depth / 100 * height;
+    if (marker.key === 'capacity') return point + markerHeight / 2;
+    if (marker.key === 'threshold') return point - markerHeight / 2;
+    return point;
+  });
+  const centers = desiredCenters.map((center) => Math.max(
+    minimumCenter,
+    Math.min(maximumCenter, center),
+  ));
+
+  for (let index = 1; index < centers.length; index += 1) {
+    centers[index] = Math.max(centers[index], centers[index - 1] + minimumGap);
+  }
+  const overflow = centers.at(-1)! - maximumCenter;
+  if (overflow > 0) {
+    for (let index = 0; index < centers.length; index += 1) centers[index] -= overflow;
+  }
+  const underflow = minimumCenter - centers[0];
+  if (underflow > 0) {
+    for (let index = 0; index < centers.length; index += 1) centers[index] += underflow;
+  }
+
+  return markers.map((marker, index) => ({
+    ...marker,
+    offset: centers[index] - desiredCenters[index],
+  }));
 }
 
 export function FishSea({ sea, snapshot, account, onSelect }: Props) {
@@ -34,6 +82,35 @@ export function FishSea({ sea, snapshot, account, onSelect }: Props) {
   });
   const exiled = new Map(snapshot.exiles);
   const depth = Math.max(5, Math.min(94, 100 - stock / capacity * 100));
+  const msyStock = Number(asString(sea?.msy_stock));
+  const alleeThreshold = Number(asString(sea?.allee_threshold));
+  const gaugeRef = useRef<HTMLDivElement>(null);
+  const [gaugeHeight, setGaugeHeight] = useState(0);
+  useLayoutEffect(() => {
+    const element = gaugeRef.current;
+    if (!element) return;
+    const updateHeight = () => setGaugeHeight(element.clientHeight);
+    updateHeight();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const gaugeMarkers = layoutGaugeMarkers([
+    { key: 'capacity', label: 'CAPACITY', value: capacity, depth: 0 },
+    {
+      key: 'sustainable',
+      label: 'SUSTAINABLE',
+      value: msyStock,
+      depth: gaugeDepth(msyStock, capacity),
+    },
+    {
+      key: 'threshold',
+      label: 'POINT OF NO RETURN',
+      value: alleeThreshold,
+      depth: gaugeDepth(alleeThreshold, capacity),
+    },
+  ], gaugeHeight || 250);
   const phase = seaPhase(sea);
   const activeExiles = [...exiled.entries()].filter(([, until]) => until > (sea?.season ?? 0));
   const visibleBoats = boats.slice(0, 18);
@@ -122,16 +199,20 @@ export function FishSea({ sea, snapshot, account, onSelect }: Props) {
           </g>
           <line className="catch-line" x1="50" y1="54" x2="92" y2="260" />
         </svg>
-        <div className="depth-gauge">
-          <span className="gauge-top">
-            CAPACITY<br /><b>{compactNumber(capacity)}</b><br />
-            MSY <b>{compactNumber(Number(asString(sea?.msy_stock)))}</b>
-          </span>
+        <div className="depth-gauge" ref={gaugeRef}>
+          {gaugeMarkers.map((marker) => (
+            <span
+              className={`gauge-marker gauge-marker-${marker.key}`}
+              key={marker.key}
+              style={{
+                top: `${marker.depth}%`,
+                '--label-offset': `${marker.offset}px`,
+              } as CSSProperties}
+            >
+              {marker.label} <b>{compactNumber(marker.value)}</b>
+            </span>
+          ))}
           <i style={{ top: `${depth}%` }} />
-          <span className="gauge-bottom">
-            POINT OF<br />NO RETURN<br />
-            <b>{compactNumber(Number(asString(sea?.allee_threshold)))}</b>
-          </span>
         </div>
         {phase === 'Wrecked' && <div className="death-stamp">THE SEA<br />IS WRECKED</div>}
       </div>
