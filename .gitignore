@@ -16,3 +16,4 @@ server/.env
 briefs/
 SUBMISSION.md
 VIDEO-SCRIPT.md
+.video/
