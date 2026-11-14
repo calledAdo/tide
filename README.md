@@ -1,12 +1,16 @@
 # $TIDE
 
-A NEP-141 memecoin whose unminted supply is a living fish stock that holders fish into existence, can fish to extinction, and police themselves.
+A NEP-141 memecoin whose unminted supply is a living fish stock. Holders fish it into existence, can fish it to extinction, and police each other on chain.
 
-[Live app](https://tidenear.astromind.cc) | Track: `memecoins` | Licence: MIT | Network: testnet
+[Live app](https://tidenear.astromind.cc) | Tracks: `memecoins`, `games` | Licence: MIT | Network: testnet
 
 ## What it is
 
-The sea is unminted TIDE supply: a stock that grows each season and can cross an Allee threshold into decline. A holder stakes TIDE as a boat, then chooses fishing effort. Catch is minted to the boat and fuel is burned from its balance. Every boat has a fair share of the seasonal quota; taking more is allowed but creates a public indictment and can block unstaking until the assembly closes. A two-stage assembly can exile a boat for ten seasons without confiscating its TIDE.
+The sea is unminted TIDE supply, held in the contract as a fish population. It has a carrying capacity, the most fish it can hold, and a stock, the fish in it right now. Each season the stock regrows toward that ceiling - but below a critical density, the Allee threshold, growth turns negative and the population cannot recover even if every boat stops.
+
+A holder stakes TIDE as a boat and chooses its effort: how hard it fishes. Catch is minted to the boat; fuel is burned from its balance and paid to nobody. Each boat may take a fair share of the season's quota, its stake-proportional slice. Taking more is allowed, and recorded on chain as a public indictment naming the boat, its catch, and its excess. Nobody stops you; everybody knows.
+
+Every third season the fleet holds an assembly and can exile a boat for ten seasons. An exiled boat keeps every token it owns - it simply cannot fish.
 
 ## Play it
 
@@ -18,6 +22,8 @@ The sea is unminted TIDE supply: a stock that grows each season and can cross an
 4. Choose effort to fish once per season, and vote or write a shard during an assembly.
 
 [Replay the sea without a wallet](https://tidenear.astromind.cc/#/replay).
+
+[Watch the two-minute demo](https://x.com/Sylvexta/status/2121704720095949063).
 
 ## Why a fishery
 
@@ -59,7 +65,7 @@ This is our fishery: a commons with its rulebook in public, where the consequenc
    *Why:* below a critical density a population's growth turns negative (the Allee effect), so collapse is a one-way door rather than a slow decline; that is what makes the endgame a real decision instead of an arithmetic one.
 2. An account may have one boat. Staking builds or tops up that boat; a deposit in season `s` can first fish in `s + 1`. Catch uses the opening stock and fleet snapshot, so transaction order does not change catch.
    *Why:* catch is proportional to stake, so splitting into many accounts gains nothing; the one-season delay stops a boat being topped up and fished in the same breath.
-3. Effort is 1 to 10,000 basis points. Catch is proportional to stake, effort, and the boat's share of the fleet; the whole fleet at full effort can take at most 25% of the opening stock. Fuel burned is `0.002 * stake * effort` at full effort.
+3. Effort is 1 to 10,000 basis points. Catch is proportional to stake, effort, and the boat's share of the fleet; the whole fleet at full effort can take at most 25% of the opening stock. Fuel burned is `0.002 * stake * effort`, so a boat at full effort burns `0.002 * stake`.
    *Why:* effort costs something, so fishing harder is a real trade-off rather than a free choice. This is the cost side of Gordon's model; without it, maximum effort is always rational.
 4. A boat's fair share is `quota * stake / fleet`, where the quota is 80% of the sea's maximum sustainable yield, computed from its current capacity. In generation 0 of this deployment, that is 58,524 fish from a 73,155-fish MSY; both are derived values, not fixed limits. Catch above fair share is permitted but recorded as a public indictment for that assembly.
    *Why:* the contract could simply refuse an oversized catch. It does not, because Ostrom's point is that a commons survives when the users monitor and sanction each other. Hard-coding the limit would answer Hardin's question by force and would prove nothing about a community.
@@ -68,89 +74,42 @@ This is our fishery: a commons with its rulebook in public, where the consequenc
 6. A name written by at least 40% of eligible boats is exiled when the season closes. Exile lasts 10 seasons and blocks fishing, unstaking, transfers, and voting; the boat's TIDE is not confiscated. Its stake remains in the fleet denominator, so its unused quota share stays in the sea.
    *Why:* a sanction that confiscated would be theft and would invite factional voting for profit. Leaving the share unfished means banishing a rival earns you nothing directly, which removes the motive the naive rules create.
 7. THE RECKONING begins when a season closes below the Allee threshold. A wreck burns half of every boat's stake and returns half to its wallet. This collective liability is part of the rule: it makes pulling back rational for a dominant overfisher as well as for the rest of the fleet.
-   *Why:* a terminal death makes the game finite, and finitely repeated commons games unravel from the end backwards (the Folk Theorem's converse), so the old rule rewarded the final raid. Clark (1973) showed extinction can be privately rational whenever a stock grows more slowly than the return on liquidating it. A raider's wreck loss is roughly 600x its final grab, and the ratio rises as the stock falls. With this deployment's six 9.9M-TIDE boats, that is ~8,000 TIDE versus ~4,950,000 TIDE.
+   *Why:* a terminal death makes the game finite, and finitely repeated commons games unravel from the end backwards (the Folk Theorem's converse), so the old rule rewarded the final raid. Clark (1973) showed extinction can be privately rational whenever a stock grows more slowly than the return on liquidating it. A raider's wreck loss is hundreds of times its final grab - 265x at full stock, 618x at 300,000 fish, 1,545x at the line - so the ratio worsens for the raider exactly as the sea approaches collapse. [CONSTANTS.md](CONSTANTS.md) has the trace.
 8. During a wreck, contributors can permanently burn 1,000,000 TIDE to fund a reseed within 60 seasons. A funded reseed starts at 70% of the new capacity; capacity falls 20% per generation while `A` stays at 120,000. If it is not funded, the sea returns through the poor fallback at the larger of 240,000 fish or 30% of new capacity, then burns half of every catch for 30 recovery seasons.
    *Why:* the sea must come back or the horizon stays finite, but it must come back worse or collapse costs nothing. Ecologists call the permanent shift a regime shift; the capacity ratchets down 20% a generation while the point of no return does not move, so the safe band narrows every time and the community can still lose the game for good.
 9. There is no owner, administrator, parameter setter, or cron dependency. Any state-changing call, including `tick`, settles up to 40 elapsed seasons, and deployment deletes every access key from the contract account.
    *Why:* the contract's game rules are fixed after deployment; only the three deployment values below vary.
 
-### Fixed in the contract
+### The numbers
 
-| Rule | Fixed contract rule |
-| --- | --- |
-| Initial capacity | Starts at 1,000,000 fish before generation decay |
-| Biology | Initial stock 700,000 fish; Allee threshold 120,000; `r = 0.6` |
-| Fleet cap | The whole fleet at full effort takes at most 25% of opening stock |
-| Effort and fuel | Effort is 1-10,000 basis points; full-effort fuel is `0.002 * stake` |
-| Quota | 80% of the current capacity's maximum sustainable yield |
-| Boat deposit | 1,000 TIDE minimum stake; 1% of each deposit burns |
-| Assembly | Every 3 seasons; up to 3 names per shard; 40% quorum; 1 TIDE per name |
-| Exile | Lasts 10 seasons and leaves the stake in the fleet denominator |
-| Wreck | Burns 50% of every boat's stake and returns 50% to its wallet |
-| Reseed | Costs 1,000,000 TIDE, must fund within 60 seasons, and starts at 70% of new capacity |
-| Recovery and decay | Capacity falls 20% per generation; recovery burns 50% of catch for 30 seasons |
-| Fallback | An unfunded return starts at the larger of 240,000 fish or 30% of new capacity |
-| Settlement | Each call settles at most 40 elapsed seasons |
+Every rule above is a compile-time constant; the contract has no setters and no access keys, so none of
+them can change on a live sea. Only three values are chosen at deployment: the genesis accounts, the
+season length, and the faucet amount.
 
-### Set when a sea is deployed
+Capacity, maximum sustainable yield, quota, and fair share are not stored limits - the contract derives
+them from the sea's current carrying capacity, so they fall together after every wreck.
 
-| Value | This deployment |
-| --- | --- |
-| `genesis` | Six generated demo boat accounts (`ana`, `ben`, `cy`, `dee`, `eve`, `greedy`), each with 10,000,000 TIDE |
-| `season_len_sec` | 60 seconds |
-| `faucet_amount` | 100,000 TIDE per account; zero on a real launch |
-
-Anyone can deploy a sea with different deployment values, which is why the README states rules rather than treating readings as constants.
-
-### Derived values for this deployment
-
-Capacity, MSY, quota, and each fair share move together; these figures are derived from current capacity.
-
-| Generation | Capacity | MSY | Quota (80% of MSY) |
-| --- | ---: | ---: | ---: |
-| Generation 0 | 1,000,000 | 73,155 | 58,524 |
-| After one wreck | 800,000 | 55,453 | 44,362 |
-| After two wrecks | 640,000 | 41,331 | 33,064 |
+The full tables - fixed constants, this deployment's three values, and the derived figures per
+generation - are in [CONSTANTS.md](CONSTANTS.md).
 
 ## Why these parameters
 
-`python3 sim/tide_sim.py` regenerates the governance table:
+Every parameter was chosen from simulations that ship in the repo and can be re-run with one command.
+Three models, in `sim/`:
 
-| Scenario | Final stock | Below A | Fisher APR | Exiles | Wrong faction | Edge |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 10% staked: open access | 78 | 9 | +20.6% | 0 | 0 | |
-| 10% staked: TIDE, same crowd + ostracism | 931,909 | None | +178.7% | 50 | 0 | |
-| 50% staked: open access | 435,206 | None | +2.0% | 0 | 0 | |
-| 50% staked: TIDE, same crowd + ostracism | 931,909 | None | +21.4% | 50 | 0 | |
-| 50% staked: benchmark, everyone keeps quota | 896,332 | None | +23.3% | 0 | 0 | |
-| 50%: 30% faction, naive rules | 896,332 | None | +23.3% | 120 | 120 | 3.44x |
-| 50%: 30% faction, TIDE rules | 896,332 | None | +23.3% | 0 | 0 | 1.00x |
-| 10% staked: all greedy | 37 | 8 | +18.9% | 0 | 0 | |
+- **Governance** (`sim/tide_sim.py`). At 10% staked, open access drives the stock to 78 fish and nine
+  seasons below the line; the same crowd under TIDE's rules ends at 931,909 fish with 50 exiles and no
+  wrongful ones. At 50% staked, governance returns +21.4% fisher APR against +2.0% for open access.
+  The model also reproduces the Hyperbolus failure: naive one-stage voting gives a 30% faction a 3.44x
+  edge to exile whoever it likes, and the two-stage rule removes it.
+- **Supply** (`sim/tide_supply.py`). Fuel burn makes quota-keeping net inflation fall from +17.0% a
+  year at 20% staked to +3.0% at 90% staked. Greedy fishing produces far less fisher APR and less
+  surviving stock.
+- **The reckoning** (`sim/tide_reckoning.py`). A raider's wreck loss against its final grab: 265x at
+  full stock, 618x at 300,000 fish, 1,545x at the line. The ratio rises as the stock falls, so the
+  rational endgame shifts from grabbing to pulling back.
 
-At 10% staked, open access crosses the line while the governed run survives with 50 exiles and no wrongful exiles. At 50% staked, governance returns +21.4% APR versus +2.0% for open access. `python3 sim/tide_supply.py` regenerates the one-year supply table:
-
-| Staked | Behaviour | Net supply 1y | Fisher APR | Minted | Burned | Stock end | Dead |
-| ---: | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| 20% | quota | +17.0% | +79.5% | 21,361,216 | 4,356,932 | 896,332 | None |
-| 20% | greedy | +0.3% | +2.3% | 1,019,056 | 760,940 | 122,949 | None |
-| 50% | quota | +10.8% | +21.5% | 21,361,216 | 10,583,594 | 896,332 | None |
-| 50% | greedy | +0.1% | +1.3% | 11,511,469 | 11,386,093 | 428,048 | None |
-| 70% | quota | +6.8% | +10.4% | 21,361,216 | 14,538,095 | 896,332 | None |
-| 70% | greedy | +0.3% | +1.5% | 19,914,297 | 19,567,554 | 594,720 | None |
-| 90% | quota | +3.0% | +4.3% | 21,361,216 | 18,342,365 | 896,332 | None |
-| 90% | greedy | +0.3% | +1.4% | 25,476,019 | 25,130,674 | 645,389 | None |
-
-Fuel burn makes quota-keeping net inflation fall from +17.0% at 20% staked to +3.0% at 90% staked. Greedy fishing produces much less fisher APR and materially less surviving stock.
-`python3 sim/tide_reckoning.py` regenerates the reckoning trace and loss/grab ratios:
-
-| Opening stock | Wreck loss versus final grab |
-| ---: | ---: |
-| 700,000 fish | 265x |
-| 300,000 fish | 618x |
-| 120,000 fish, the line | 1,545x |
-| Across three generations | 978x |
-
-The modeled raider's final grab is 978x smaller than its wreck loss across three generations. As stock approaches the line, the loss-to-grab ratio rises, so the rational endgame shifts from grabbing to pulling back.
+Full output tables are in [CONSTANTS.md](CONSTANTS.md).
 
 ## How it can be abused
 
