@@ -6,7 +6,7 @@ This Node 22 service provides two small operational functions for the TIDE testn
 - The keeper periodically views `get_sea()` and sends `tick({})` when seasons are more than `KEEPER_MIN_BEHIND` behind, up to five ticks per run. The default threshold is 30.
 - The event indexer backfills and follows TIDE transactions through FastNEAR, persisting `events.jsonl` and processed transaction hashes in `DATA_DIR`.
 
-The current demo contract is `sea.tide-fund-94145.testnet`. The previous `tide-1794517191.memethis-t40-demo.testnet` contract is a dead exhibit and must not be configured for the bots.
+The current demo contract is `sea.tide-fund-94145.testnet`; configure the bots and indexer with this live contract.
 
 ## Bot captains
 
@@ -92,7 +92,7 @@ for file in src/*.js; do node --check "$file"; done
    ssh VPS 'cd /opt/tide/server && npm ci --omit=dev'
    ```
 
-4. Create `/etc/tide/tide-api.env` with the variables from `deploy/env.example`. Set `DATA_DIR=/var/lib/tide` and the configured `TIDE_CONTRACT` (the current demo value is `sea.tide-fund-94145.testnet`), sponsor, key, and frontend origins. Do not use the dead `tide-1794517191.memethis-t40-demo.testnet` exhibit. Then protect it:
+4. Create `/etc/tide/tide-api.env` with the variables from `deploy/env.example`. Set `DATA_DIR=/var/lib/tide`, `TIDE_CONTRACT=sea.tide-fund-94145.testnet` or your own deployed contract, sponsor, key, and frontend origins. Then protect it:
 
    ```sh
    sudo chown root:root /etc/tide/tide-api.env
