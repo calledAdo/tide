@@ -75,12 +75,14 @@ export function FishSea({ sea, snapshot, account, onSelect }: Props) {
   const stock = Number(asString(sea?.stock_fish));
   const capacity = Math.max(1, Number(asString(sea?.carrying_capacity)));
   const fishCount = Math.max(0, Math.min(50, Math.round(stock / capacity * 50)));
+  const clock = useSeasonClock(sea);
   const boats = Object.entries(snapshot.boats).filter(([name, boat]) => {
     const until = snapshot.exiles.find(([item]) => item === name)?.[1] ?? boat?.exiled_until;
     if (name === CONTRACT || !boatHasStake(boat)) return false;
-    return until === undefined || until === null || until <= (sea?.season ?? 0);
+    return until === undefined || until === null || until <= clock.season;
   });
   const exiled = new Map(snapshot.exiles);
+  const activeExiles = [...exiled.entries()].filter(([, until]) => until > clock.season);
   const depth = Math.max(5, Math.min(94, 100 - stock / capacity * 100));
   const msyStock = Number(asString(sea?.msy_stock));
   const alleeThreshold = Number(asString(sea?.allee_threshold));
@@ -112,12 +114,16 @@ export function FishSea({ sea, snapshot, account, onSelect }: Props) {
     },
   ], gaugeHeight || 250);
   const phase = seaPhase(sea);
-  const clock = useSeasonClock(sea);
   const ownBoat = account ? snapshot.boats[account] : null;
   const ready = Boolean(account && sea && phase === 'Fishing' && sea.seasons_behind <= 40
     && ownBoat?.can_fish_now && boatCanFishAtSeason(ownBoat, clock.season));
-  const activeExiles = [...exiled.entries()].filter(([, until]) => until > (sea?.season ?? 0));
   const visibleBoats = boats.slice(0, 18);
+  const firstActiveExile = activeExiles[0];
+  const islandCaption = firstActiveExile
+    ? firstActiveExile[1] == null || !Number.isFinite(firstActiveExile[1])
+      ? shortName(firstActiveExile[0])
+      : `UNTIL DAY ${firstActiveExile[1]}`
+    : 'EXILE ISLAND · EMPTY';
   return (
     <section className={`sea-wrap ${phase === 'Wrecked' ? 'dead-sea' : ''}`}>
       <div className="sea-heading">
@@ -137,11 +143,23 @@ export function FishSea({ sea, snapshot, account, onSelect }: Props) {
       <div className="sea-visual">
         <svg viewBox="0 0 820 360" role="img" aria-label="The live shared sea with rival boats">
           <path className="wave wave-one" d="M0 48 Q80 30 160 48 T320 48 T480 48 T640 48 T820 48" />
-          <path className="wave wave-two" d="M0 63 Q70 46 140 63 T280 63 T420 63 T560 63 T700 63 T840 63" />
-          <path className="wave wave-three" d="M0 78 Q90 62 180 78 T360 78 T540 78 T720 78 T900 78" />
+          <path
+            className="wave wave-two"
+            d="M0 63 Q70 46 140 63 T280 63 T420 63 T560 63 T700 63 T840 63"
+          />
+          <path
+            className="wave wave-three"
+            d="M0 78 Q90 62 180 78 T360 78 T540 78 T720 78 T900 78"
+          />
           <path className="water-band" d="M0 54 H820 V360 H0Z" />
-          <path className="caustic caustic-one" d="M120 130q45-18 90 0t90 0M360 210q45-18 90 0t90 0" />
-          <path className="caustic caustic-two" d="M210 285q35-12 70 0t70 0M550 125q35-12 70 0t70 0" />
+          <path
+            className="caustic caustic-one"
+            d="M120 130q45-18 90 0t90 0M360 210q45-18 90 0t90 0"
+          />
+          <path
+            className="caustic caustic-two"
+            d="M210 285q35-12 70 0t70 0M550 125q35-12 70 0t70 0"
+          />
           {Array.from({ length: fishCount }, (_, index) => (
             <g
               key={`fish-${index}`}
@@ -210,9 +228,8 @@ export function FishSea({ sea, snapshot, account, onSelect }: Props) {
           <g className="exile-island" transform="translate(-638 0)">
             <path d="M674 305q30-35 80 0l-8 15h-78z" />
             <path d="M700 301l8-33 12 33M713 286l19-12" />
-            <text x="672" y="342">EXILE ISLAND</text>
-            <text x="672" y="352">UNTIL DAY {activeExiles[0]?.[1] ?? '—'}</text>
-            {[0, 1, 2].map((index) => (
+            <text x="672" y="342">{islandCaption}</text>
+            {activeExiles.length > 0 && [0, 1, 2].map((index) => (
               <path
                 key={index}
                 className="beached-boat"
